@@ -282,3 +282,50 @@ it('exports only selected liquid IDs from the selection bar', async () => {
   await waitFor(() => expect(selection).toEqual({ ids: ['one'] }));
   expect(screen.getByRole('button', { name: 'Gesamte Sammlung exportieren' })).toBeVisible();
 });
+
+it.each(
+  [
+    { op: 'and', conditions: [null] },
+    { op: 'and', conditions: {} },
+    { op: 'and', conditions: [{ op: 'or', conditions: [null] }] },
+    { op: 'and', conditions: [false] },
+    [{ fieldId: 'favorite', operator: 'eq', value: true }],
+    true,
+  ].map((filters) => ({ filters })),
+)(
+  'keeps malformed URL filter $filters visible and removable without broadening its API query',
+  async ({ filters }) => {
+    let route = '';
+    let requested: unknown;
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url.includes('/liquids?')) {
+        requested = JSON.parse(new URL(url, 'http://localhost').searchParams.get('filters')!);
+        return new Response(
+          JSON.stringify({ error: { code: 'validation', message: 'Ungültiger Filter' } }),
+          { status: 422 },
+        );
+      }
+      return new Response('{"items":[]}');
+    });
+    mount(
+      <LiquidsPage query={'?filters=' + encodeURIComponent(JSON.stringify(filters))} />,
+      [numberField],
+      (path) => {
+        route = path;
+      },
+    );
+    expect(await screen.findByText('Ungültiger Filter')).toBeVisible();
+    expect(requested).toEqual(filters);
+    expect(route).toBe('');
+    expect(screen.getByRole('button', { name: 'Ungültigen Feldfilter entfernen' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Filter aktiv' }));
+    const dialog = screen.getByRole('dialog', { name: 'Filter' });
+    expect(
+      within(dialog).getByText('Ungültiger Feldfilter. Bitte entfernen und neu anlegen.'),
+    ).toBeVisible();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }));
+    expect(route).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Ungültigen Feldfilter entfernen' }));
+    expect(new URLSearchParams(route.split('?')[1]).has('filters')).toBe(false);
+  },
+);

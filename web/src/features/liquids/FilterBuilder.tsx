@@ -32,6 +32,20 @@ export function allowedOperators(type: string) {
               : ['eq']),
   ];
 }
+// URL/saved-view JSON reaches this boundary before the API can reject it.
+// This checks renderable structure only; the server retains value validation.
+export function isFilterStructure(value: unknown, depth = 1): value is Filter {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 3) return false;
+  const node = value as Filter;
+  if (node.op !== undefined)
+    return (
+      (node.op === 'and' || node.op === 'or') &&
+      Array.isArray(node.conditions) &&
+      node.conditions.length <= 20 &&
+      node.conditions.every((child) => isFilterStructure(child, depth + 1))
+    );
+  return typeof node.fieldId === 'string' && typeof node.operator === 'string';
+}
 export function FilterBuilder({
   value,
   onChange,
@@ -43,6 +57,13 @@ export function FilterBuilder({
   fields: Field[];
   tags?: Tag[];
 }) {
+  if (value !== undefined && !isFilterStructure(value))
+    return (
+      <div className="filter-builder">
+        <p role="alert">Ungültiger Feldfilter. Bitte entfernen und neu anlegen.</p>
+        <Button onClick={() => onChange(undefined)}>Ungültigen Feldfilter entfernen</Button>
+      </div>
+    );
   const conditions = value?.op ? value.conditions || [] : value ? [value] : [];
   const favorite: Field = {
     id: 'favorite',

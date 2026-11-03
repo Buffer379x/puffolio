@@ -1,7 +1,7 @@
 import type { Field, Filter, Scalar, Tag } from '../../app/types';
 import { Button } from '../../components/ui';
 import { formatDate, formatDecimal } from '../fields/values';
-import { filterOperatorLabels } from './FilterBuilder';
+import { filterOperatorLabels, isFilterStructure } from './FilterBuilder';
 
 function removeCondition(filter: Filter, path: number[]): Filter | undefined {
   if (!path.length) return undefined;
@@ -23,6 +23,18 @@ export function FilterChips({
   tags: Tag[];
   onChange: (value: Filter | undefined) => void;
 }) {
+  if (!isFilterStructure(value))
+    return (
+      <div className="filter-chips">
+        <Button
+          className="filter-chip"
+          aria-label="Ungültigen Feldfilter entfernen"
+          onClick={() => onChange(undefined)}
+        >
+          Ungültiger Feldfilter<span aria-hidden="true"> ×</span>
+        </Button>
+      </div>
+    );
   const render = (condition: Filter, path: number[]): React.ReactNode => {
     if (condition.op) {
       const label = condition.op === 'and' ? 'Alle Bedingungen (UND)' : 'Eine Bedingung (ODER)';
