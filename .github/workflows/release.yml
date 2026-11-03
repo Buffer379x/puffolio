@@ -1,0 +1,282 @@
+name: Release 0.1.0
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version
+        type: choice
+        required: true
+        default: '0.1.0'
+        options: ['0.1.0']
+      source_sha:
+        description: Exact reviewed main commit (40 hex characters)
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: puffolio-release-0.1.0
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Bind release to the reviewed source
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          test "$RELEASE_VERSION" = 0.1.0
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          test "$(cat VERSION)" = "$RELEASE_VERSION"
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    with:
+      source_sha: ${{ inputs.source_sha }}
+    permissions:
+      contents: read
+  publish-image:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.identity.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse existing release; detect an interrupted image push
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work/release
+          if gh api repos/Buffer379x/puffolio/git/ref/tags/v0.1.0 >/dev/null 2>work/release/tag-error; then
+            echo 'v0.1.0 already exists; never overwrite a release.' >&2
+            exit 1
+          fi
+          grep -q 'HTTP 404' work/release/tag-error
+          if docker buildx imagetools inspect ghcr.io/buffer379x/puffolio:0.1.0 --format '{{.Manifest.Digest}}' >work/release/existing-digest 2>work/release/image-error; then
+            digest=$(cat work/release/existing-digest)
+            python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio \
+              --source-sha '${{ inputs.source_sha }}' --expected-digest "$digest" --output work/release/index.json
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+            echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          else
+            grep -Eiq 'manifest unknown|NAME_UNKNOWN|MANIFEST_UNKNOWN' work/release/image-error
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish exact version and build attestations
+        if: steps.version.outputs.exists != 'true'
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/buffer379x/puffolio:0.1.0
+          build-args: VERSION=0.1.0
+          labels: org.opencontainers.image.revision=${{ inputs.source_sha }}
+          sbom: true
+          provenance: mode=max
+      - name: Validate and preserve canonical immutable identity
+        id: identity
+        env:
+          EXPECTED_DIGEST: ${{ steps.build.outputs.digest || steps.version.outputs.digest }}
+        run: |
+          test -n "$EXPECTED_DIGEST"
+          python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio \
+            --source-sha '${{ inputs.source_sha }}' --expected-digest "$EXPECTED_DIGEST" --output work/release/index.json
+          echo "digest=$EXPECTED_DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Preserve release index identity for retries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-index
+          path: work/release/index.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+  signed-provenance:
+    needs: publish-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-index
+          path: work/release
+      - name: Check durable index identity
+        env:
+          INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          data=json.load(open('work/release/index.json'))
+          assert data['digest']==os.environ['INDEX_DIGEST']
+          assert data['sourceSha']==os.environ['SOURCE_SHA'] and data['version']=='0.1.0'
+          assert set(data['platforms'])=={'amd64','arm64'}
+          PY
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/buffer379x/puffolio
+          subject-digest: ${{ needs.publish-image.outputs.digest }}
+          push-to-registry: true
+      - name: Verify signed provenance against the reviewed workflow source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          gh attestation verify "oci://ghcr.io/buffer379x/puffolio@$INDEX_DIGEST" \
+            --repo Buffer379x/puffolio \
+            --signer-workflow Buffer379x/puffolio/.github/workflows/release.yml \
+            --source-digest "$SOURCE_SHA" --source-ref refs/heads/main \
+            --deny-self-hosted-runners --format json > work/release/attestation.json
+      - name: Preserve signed provenance verification
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-provenance
+          path: work/release/attestation.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+  anonymous-verification:
+    needs: [publish-image, signed-provenance]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      IMAGE: ghcr.io/buffer379x/puffolio
+      INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Initialize anonymous Docker configuration
+        run: |
+          config="$RUNNER_TEMP/puffolio-anonymous-$ARCH"
+          install -d -m 700 "$config"
+          printf '{}\n' > "$config/config.json"
+          printf 'DOCKER_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+      - name: Pull without credentials and verify version identity
+        id: platform
+        run: |
+          mkdir -p "$DOCKER_CONFIG" work/release-assets
+          printf '{}\n' > "$DOCKER_CONFIG/config.json"
+          docker pull --platform "linux/$ARCH" "$IMAGE@$INDEX_DIGEST"
+          test "$(docker buildx imagetools inspect "$IMAGE:0.1.0" --format '{{.Manifest.Digest}}')" = "$INDEX_DIGEST"
+          docker buildx imagetools inspect "$IMAGE@$INDEX_DIGEST" --raw > work/index.json
+          python3 - <<'PY'
+          import json,os
+          data=json.load(open('work/index.json'))
+          manifests=[m for m in data['manifests'] if m.get('platform',{}).get('architecture')==os.environ['ARCH'] and m.get('platform',{}).get('os')=='linux']
+          assert len(manifests)==1
+          digest=manifests[0]['digest']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('digest='+digest+'\n')
+          with open('work/release-assets/digest-'+os.environ['ARCH']+'.txt','w') as f:f.write('linux/'+os.environ['ARCH']+' '+digest+'\n')
+          PY
+      - name: Native platform lifecycle and restore smoke test
+        run: bash docs/scripts/container-smoke.sh "$IMAGE@$INDEX_DIGEST" "linux/$ARCH"
+      - name: Platform SPDX inventory
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ghcr.io/buffer379x/puffolio@${{ steps.platform.outputs.digest }}
+          syft-version: v1.56.0
+          output-file: work/release-assets/puffolio-${{ matrix.arch }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Record complete vulnerability findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: ghcr.io/buffer379x/puffolio@${{ steps.platform.outputs.digest }}
+          format: json
+          output: work/release-assets/scan-${{ matrix.arch }}.json
+          scanners: vuln
+          ignore-unfixed: false
+          exit-code: '0'
+      - name: Enforce runtime vulnerability policy
+        run: python3 docs/scripts/scan-policy.py "work/release-assets/scan-$ARCH.json"
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          overwrite: true
+          name: verified-${{ matrix.arch }}
+          path: work/release-assets/
+          if-no-files-found: error
+          retention-days: 14
+  github-release:
+    needs: [publish-image, signed-provenance, anonymous-verification]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: verified-*
+          path: work/release-assets
+          merge-multiple: true
+      - name: Assemble exact installation artifacts
+        run: |
+          cp deploy/compose.yaml work/release-assets/compose.yaml
+          cp deploy/unraid/puffolio.xml work/release-assets/puffolio.xml
+          printf 'index %s\n' "$INDEX_DIGEST" > work/release-assets/image-digests.txt
+          cat work/release-assets/digest-amd64.txt work/release-assets/digest-arm64.txt >> work/release-assets/image-digests.txt
+          rm work/release-assets/digest-amd64.txt work/release-assets/digest-arm64.txt
+          cd work/release-assets
+          sha256sum compose.yaml puffolio.xml image-digests.txt *.spdx.json scan-*.json > SHA256SUMS
+      - name: Create release after all verification gates
+        run: |
+          gh release create v0.1.0 work/release-assets/* \
+            --repo Buffer379x/puffolio --target "$SOURCE_SHA" --title 'Puffolio 0.1.0' \
+            --notes-file docs/release-0.1.0.md --latest=false

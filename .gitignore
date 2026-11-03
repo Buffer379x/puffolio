@@ -25,3 +25,8 @@ playwright-report/
 test-results/
 *.log
 .DS_Store
+
+# Package-manager and Python caches
+.pnpm-store/
+__pycache__/
+*.pyc
