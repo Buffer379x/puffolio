@@ -1,0 +1,14 @@
+packages:
+  - .
+onlyBuiltDependencies:
+  - esbuild
+supportedArchitectures:
+  os:
+    - linux
+    - darwin
+  cpu:
+    - arm64
+    - x64
+  libc:
+    - musl
+    - glibc

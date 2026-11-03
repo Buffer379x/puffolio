@@ -1,0 +1,96 @@
+# Sicherung und Wiederherstellung
+
+## Eigene Sammlung
+
+Unter Einstellungen → Daten lässt sich die persönliche Sammlung als
+Puffolio-ZIP exportieren. Sie enthält Felddefinitionen, Werte, Tags und deren
+Palettenfarben, bereinigte Bildmaster und Ausschnitte sowie gespeicherte
+Ansichten, Dashboard und eigene Darstellungspräferenzen. Zugangsdaten und
+fremde Sammlungen gehören nicht zum Sammlungsexport.
+
+Der Import hat zwei Schritte: Datei prüfen und die angezeigte Vorschau
+bestätigen. Er importiert Puffolio-Exporte, keine beliebigen CSV-Dateien.
+IDs werden auf die Zielsammlung abgebildet; ein Import überschreibt nicht
+stillschweigend bestehende Liquids. Die Webgrenzen betragen 100 MiB entpackte
+Daten, 10.000 Archiveinträge und 5.000 Bilder. Ungültige Archivpfade und unbekannte
+Schemaversionen werden abgelehnt.
+
+Der Import fügt Daten hinzu und behält Pflichtregeln bei. Würden vorhandene
+oder importierte Liquids dadurch Pflichtwerte vermissen, wird der Import
+vollständig abgelehnt. Das gilt auch beim Überschreiten gemeinsamer Grenzen,
+etwa 100 gespeicherter Ansichten. Eine leere persönliche Sammlung eignet sich
+für die unveränderte Übernahme einer anderen Sammlung.
+
+Für größere eigene Exporte gibt es einen Offline-Import mit ausdrücklich
+anzugebenden, begrenzten Ressourcenlimits. Den Container vorher stoppen und
+das Datenverzeichnis sichern:
+
+```sh
+puffolio import --from collection.zip --collection COLLECTION_UUID \
+  --max-expanded-bytes 209715200 --max-entries 20000 --max-images 10000
+```
+
+Dieser Aufruf erfolgt mit Zugriff auf das lokale Datenverzeichnis, etwa in
+einem einmaligen Container mit demselben `/data`-Mount. Es gibt keinen
+unbeschränkten „Limits aus“-Schalter. Freier Speicher wird benötigt. Ein
+Sammlungsexport ist keine vollständige Instanzsicherung.
+
+## Instanzsicherung
+
+Administratoren laden unter Verwaltung nach erneuter Passwortbestätigung
+eine vollständige Instanzsicherung herunter. Sie enthält alle persönlichen
+Sammlungen, Datenbank und Medien. Das Manifest enthält Versionen und
+Prüfsummen. Die Sicherung ist vertraulich und nicht verschlüsselt.
+
+Die App erstellt eine konsistente SQLite-Sicherung und nimmt die zugehörigen
+unveränderlichen Medien unter Schreibsperre auf. Nicht nur die gerade
+geöffnete `.db`-Datei kopieren: SQLite-WAL gehört zum aktiven Zustand.
+Sicherungen zusätzlich auf ein anderes physisches Ziel kopieren; eine
+Sicherung auf demselben Volume schützt nicht vor dessen Ausfall.
+
+## Offline-Restore
+
+1. Passende Puffolio-Imageversion bereitstellen und den laufenden Container
+   stoppen. Das bisherige Datenverzeichnis unverändert als Rückweg behalten.
+2. Backup in ein eigenes Wiederherstellungsverzeichnis kopieren. Ein leeres
+   Zielverzeichnis für die wiederhergestellten Daten anlegen und UID/GID99:100
+   die benötigten Lese-/Schreibrechte geben.
+3. Wiederherstellung mit dem Binary desselben Releases starten:
+
+```sh
+docker stop puffolio
+mkdir -p recovery/restored
+sudo chown -R 99:100 recovery
+sudo chmod 700 recovery recovery/restored
+docker run --rm --user 99:100 --read-only --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
+  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.1.0 \
+  restore --from /restore/puffolio-backup.zip --data-dir /restore/restored
+```
+
+4. Der Restore prüft Manifest, sichere Pfade, Prüfsummen, Schema und
+   Datenbankintegrität. Bestehende Ziele werden nicht überschrieben. Alte
+   Sitzungen werden widerrufen; Nutzer melden sich erneut an.
+5. Die Bindung `/data` in Compose bzw. Unraid auf das wiederhergestellte
+   Verzeichnis umstellen und mit dem passenden Image starten.
+6. Readiness, Anmeldung, Datum, Tags, Bilder einschließlich nachträglichem
+   Ausschnitt und Dashboard prüfen. Erst danach über das alte Verzeichnis
+   entscheiden.
+
+## Passwort vergessen
+
+Ein Administrator kann lokal das Passwort eines Kontos zurücksetzen. Den
+laufenden Dienst vorher stoppen, damit nur ein Prozess das Datenverzeichnis
+schreibend nutzt. Der Unterbefehl `reset-password --username NAME` liest das
+neue Passwort über die lokale Eingabe; Geheimnisse nicht als Prozessargument
+in Shell-History oder Logs schreiben. Keine öffentlich abrufbaren
+Standard-Resetcodes und keine SMTP-Abhängigkeit.
+
+## Update und Rollback
+
+Vor einem Update eine geprüfte Instanzsicherung anlegen. Eine konkrete
+Imageversion wählen und dieselbe Datenbindung verwenden. Ein unbekanntes
+neueres Schema wird beim Start abgelehnt. Rollback benötigt sowohl das alte
+Image als auch ein dazu passendes Backup; ein altes Binary darf nicht einfach
+auf eine neu migrierte Datenbank angewendet werden.

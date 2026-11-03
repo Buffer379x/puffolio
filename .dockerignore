@@ -17,3 +17,9 @@ test-results
 *.sqlite*
 *.log
 .DS_Store
+.pnpm-store
+__pycache__
+**/__pycache__
+*.pyc
+**/.DS_Store
+web/dist
