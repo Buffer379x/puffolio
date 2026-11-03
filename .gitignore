@@ -1,0 +1,27 @@
+# Local planning, prototypes, test fixtures, reports and implementation scratch space
+/work/
+
+# Runtime data and secrets
+/data/
+/backups/
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
+# Build products and dependencies
+/bin/
+/dist/
+/web/dist/
+node_modules/
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
