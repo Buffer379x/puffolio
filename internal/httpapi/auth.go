@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"github.com/Buffer379x/puffolio/internal/auth"
 	"github.com/Buffer379x/puffolio/internal/fault"
 	"github.com/Buffer379x/puffolio/internal/fields"
@@ -35,7 +34,7 @@ func (s *server) setup(w http.ResponseWriter, r *http.Request) {
 		Code, Username, DisplayName, Password string
 		StarterFields                         bool `json:"starterFields"`
 	}
-	if e := decode(w, r, &in); e != nil {
+	if e := decodeAuth(w, r, &in); e != nil {
 		respondError(w, e)
 		return
 	}
@@ -48,6 +47,10 @@ func (s *server) setup(w http.ResponseWriter, r *http.Request) {
 		respondError(w, fault.New(403, "invalid_code", "Einrichtungscode ungültig"))
 		return
 	}
+	if e := s.Store.Writer.LockContext(r.Context()); e != nil {
+		return
+	}
+	defer s.Store.Writer.Unlock()
 	u, e := s.auth.SetupInitialized(r.Context(), in.Username, in.DisplayName, in.Password, func(ctx context.Context, tx *sql.Tx, u auth.User) error {
 		roles := map[string]string{}
 		var err error
@@ -57,7 +60,7 @@ func (s *server) setup(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		return s.initializeUserTx(r, tx, u, roles)
+		return auth.InitializeUserTx(ctx, tx, u, roles)
 	})
 	if e != nil {
 		respondError(w, fault.Validation(e.Error()))
@@ -70,7 +73,7 @@ func (s *server) setup(w http.ResponseWriter, r *http.Request) {
 }
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Username, Password string }
-	if e := decode(w, r, &in); e != nil {
+	if e := decodeAuth(w, r, &in); e != nil {
 		respondError(w, e)
 		return
 	}
@@ -78,6 +81,10 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		respondError(w, fault.New(429, "rate_limited", "Bitte später erneut versuchen"))
 		return
 	}
+	if e := s.Store.Writer.LockContext(r.Context()); e != nil {
+		return
+	}
+	defer s.Store.Writer.Unlock()
 	u, e := s.auth.Login(r.Context(), in.Username, in.Password)
 	if e != nil {
 		respondError(w, fault.New(401, "login_failed", "Anmeldung fehlgeschlagen"))
@@ -89,7 +96,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 }
 func (s *server) consumeInvite(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Token, Password, DisplayName string }
-	if e := decode(w, r, &in); e != nil {
+	if e := decodeAuth(w, r, &in); e != nil {
 		respondError(w, e)
 		return
 	}
@@ -97,9 +104,11 @@ func (s *server) consumeInvite(w http.ResponseWriter, r *http.Request) {
 		respondError(w, fault.New(429, "rate_limited", "Bitte später erneut versuchen"))
 		return
 	}
-	u, e := s.auth.ConsumeInvitationInitialized(r.Context(), in.Token, in.Password, in.DisplayName, func(ctx context.Context, tx *sql.Tx, u auth.User) error {
-		return s.initializeUserTx(r, tx, u, map[string]string{})
-	})
+	if e := s.Store.Writer.LockContext(r.Context()); e != nil {
+		return
+	}
+	defer s.Store.Writer.Unlock()
+	u, e := s.auth.ConsumeInvitation(r.Context(), in.Token, in.Password, in.DisplayName)
 	if e != nil {
 		respondError(w, fault.Validation(e.Error()))
 		return
@@ -312,27 +321,4 @@ func (s *server) system(w http.ResponseWriter, r *http.Request) error {
 	}
 	write(w, 200, map[string]any{"version": s.Version, "schemaVersion": store.SchemaVersion, "database": integrity})
 	return nil
-}
-func (s *server) initializeUserTx(r *http.Request, tx *sql.Tx, u auth.User, roles map[string]string) error {
-	p := Preferences{Version: 1, Theme: "system", Timezone: "Europe/Berlin", View: "grid", Images: true, ListFields: []string{}, GridFields: []string{}, Roles: roles}
-	defs, e := fields.List(r.Context(), tx, u.CollectionID)
-	if e != nil {
-		return e
-	}
-	for _, d := range defs {
-		if d.Visibility.List {
-			p.ListFields = append(p.ListFields, d.ID)
-		}
-		if d.Visibility.Grid {
-			p.GridFields = append(p.GridFields, d.ID)
-		}
-	}
-	raw, _ := json.Marshal(p)
-	if _, e = tx.ExecContext(r.Context(), "INSERT OR IGNORE INTO user_preferences(user_id,data) VALUES(?,?)", u.ID, string(raw)); e != nil {
-		return e
-	}
-	widgets := []Widget{{ID: store.ID(), Type: "count", Title: "Liquids", Size: "small"}, {ID: store.ID(), Type: "favorites", Title: "Favoriten", Size: "small"}, {ID: store.ID(), Type: "recent", Title: "Zuletzt hinzugefügt", Size: "wide", Limit: 5}}
-	b, _ := json.Marshal(widgets)
-	_, e = tx.ExecContext(r.Context(), "INSERT OR IGNORE INTO dashboards(user_id,data) VALUES(?,?)", u.ID, string(b))
-	return e
 }

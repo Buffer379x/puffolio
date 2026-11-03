@@ -154,6 +154,10 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 		if e != nil {
 			return res, e
 		}
+		res.Count = &count
+		if w.Type == "sum" && count == 0 {
+			return res, nil
+		}
 		if w.Type == "average" {
 			if count == 0 {
 				return res, fault.Validation("Keine Werte vorhanden")

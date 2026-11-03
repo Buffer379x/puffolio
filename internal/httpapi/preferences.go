@@ -3,6 +3,7 @@ package httpapi
 import (
 	"database/sql"
 	"encoding/json"
+	"github.com/Buffer379x/puffolio/internal/auth"
 	"github.com/Buffer379x/puffolio/internal/dashboard"
 	"github.com/Buffer379x/puffolio/internal/fault"
 	"github.com/Buffer379x/puffolio/internal/fields"
@@ -14,16 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-type Preferences struct {
-	Version    int               `json:"version"`
-	Theme      string            `json:"theme"`
-	Timezone   string            `json:"timezone"`
-	View       string            `json:"view"`
-	Images     bool              `json:"images"`
-	ListFields []string          `json:"listFields"`
-	GridFields []string          `json:"gridFields"`
-	Roles      map[string]string `json:"roles"`
-}
+type Preferences = auth.ApplicationPreferences
 type Widget = dashboard.Widget
 type Layout struct {
 	Version int      `json:"version"`

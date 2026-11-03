@@ -13,7 +13,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -26,7 +25,7 @@ const SchemaVersion = 1
 type Store struct {
 	DB     *sql.DB
 	Dir    string
-	Writer sync.Mutex
+	Writer WriterLock
 	lock   *os.File
 }
 

@@ -1,3 +1,4 @@
+import { createUUID } from '../../app/uuid';
 import { useState } from 'react';
 import { api } from '../../app/api';
 import { useApp, useAction, useDirty } from '../../app/state';
@@ -204,7 +205,10 @@ function FieldDialog({
                     onChange={(e) =>
                       setDraft({
                         ...draft,
-                        visibility: { ...draft.visibility, [key]: e.target.checked },
+                        visibility: {
+                          ...draft.visibility,
+                          [key]: e.target.checked,
+                        },
                       })
                     }
                   />
@@ -320,7 +324,9 @@ function FieldDialog({
                     label={`Option ${i + 1} entfernen`}
                     icon="close"
                     onClick={() =>
-                      config({ options: draft.config.options?.filter((x) => x.id !== o.id) })
+                      config({
+                        options: draft.config.options?.filter((x) => x.id !== o.id),
+                      })
                     }
                   />
                 </div>
@@ -328,10 +334,7 @@ function FieldDialog({
               <Button
                 onClick={() =>
                   config({
-                    options: [
-                      ...(draft.config.options || []),
-                      { id: crypto.randomUUID(), label: '' },
-                    ],
+                    options: [...(draft.config.options || []), { id: createUUID(), label: '' }],
                   })
                 }
               >
@@ -345,7 +348,10 @@ function FieldDialog({
                 type="checkbox"
                 checked={!!draft.config.defaultToday}
                 onChange={(e) => {
-                  config({ defaultToday: e.target.checked, defaultValue: null });
+                  config({
+                    defaultToday: e.target.checked,
+                    defaultValue: null,
+                  });
                   setDefaultEnabled(false);
                 }}
               />
@@ -484,7 +490,9 @@ export function FieldsSettings() {
                 value={preferences.roles[role] || ''}
                 onChange={(e) =>
                   void a.run(() =>
-                    savePreferences({ roles: { ...preferences.roles, [role]: e.target.value } }),
+                    savePreferences({
+                      roles: { ...preferences.roles, [role]: e.target.value },
+                    }),
                   )
                 }
               >

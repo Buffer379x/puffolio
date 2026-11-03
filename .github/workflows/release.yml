@@ -184,7 +184,6 @@ jobs:
     permissions:
       contents: read
     env:
-      DOCKER_CONFIG: ${{ runner.temp }}/puffolio-anonymous-${{ matrix.arch }}
       IMAGE: ghcr.io/buffer379x/puffolio
       INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
       ARCH: ${{ matrix.arch }}
@@ -193,6 +192,12 @@ jobs:
         with:
           ref: ${{ inputs.source_sha }}
           persist-credentials: false
+      - name: Initialize anonymous Docker configuration
+        run: |
+          config="$RUNNER_TEMP/puffolio-anonymous-$ARCH"
+          install -d -m 700 "$config"
+          printf '{}\n' > "$config/config.json"
+          printf 'DOCKER_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
       - name: Pull without credentials and verify version identity
         id: platform
         run: |

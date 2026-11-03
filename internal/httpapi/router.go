@@ -140,8 +140,15 @@ func (s *server) middleware(next http.Handler) http.Handler {
 				respondError(w, fault.New(403, "origin_rejected", "Herkunft nicht erlaubt"))
 				return
 			}
-			s.Store.Writer.Lock()
-			defer s.Store.Writer.Unlock()
+			// Public authentication parses/admit requests in its handler before
+			// acquiring the same writer boundary. Never buffer import bodies here.
+			publicAuth := r.Method == "POST" && (r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/invite" || r.URL.Path == "/api/v1/setup")
+			if !publicAuth {
+				if e := s.Store.Writer.LockContext(r.Context()); e != nil {
+					return
+				}
+				defer s.Store.Writer.Unlock()
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -190,10 +197,16 @@ func (s *server) handle(pattern string, h func(http.ResponseWriter, *http.Reques
 	})
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) error {
+	return decodeLimited(w, r, v, 2<<20)
+}
+func decodeAuth(w http.ResponseWriter, r *http.Request, v any) error {
+	return decodeLimited(w, r, v, 8<<10)
+}
+func decodeLimited(w http.ResponseWriter, r *http.Request, v any, limit int64) error {
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		return fault.New(415, "content_type", "JSON erforderlich")
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if e := d.Decode(v); e != nil {

@@ -9,9 +9,10 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { networkInterfaces } from 'node:os';
+import { createServer } from 'node:net';
 import { deflateSync } from 'node:zlib';
 const root = path.resolve(__dirname, '../..');
-let sequence = 0;
 interface Server {
   url: string;
   dir: string;
@@ -28,19 +29,44 @@ export interface App {
   me: any;
   write: (path: string, method: string, data?: unknown) => Promise<any>;
 }
-export const test = base.extend<{ server: Server; app: App }>({
-  server: async ({}, use, info) => {
+export const test = base.extend<{ server: Server; app: App; lanHTTP: boolean }>({
+  lanHTTP: [false, { option: true }],
+  server: async ({ lanHTTP }, use) => {
     await mkdir(path.join(root, 'work/qa'), { recursive: true });
     const dir = await mkdtemp(path.join(root, 'work/qa/e2e-'));
-    const port = 33000 + info.workerIndex * 100 + (sequence++ % 100);
-    const url = `http://127.0.0.1:${port}`;
+    const host = lanHTTP
+      ? Object.values(networkInterfaces())
+          .flat()
+          .find((address) => address?.family === 'IPv4' && !address.internal)?.address
+      : '127.0.0.1';
+    if (!host) throw new Error('LAN acceptance requires a non-loopback IPv4 interface');
+    // Let the OS choose an unused port instead of intersecting the ephemeral
+    // range with deterministic worker counters. Release just before spawning.
+    const port = await new Promise<number>((resolve, reject) => {
+      const socket = createServer();
+      socket.once('error', reject);
+      socket.listen(0, host, () => {
+        const address = socket.address();
+        if (!address || typeof address === 'string') {
+          socket.close();
+          reject(new Error('No TCP test port'));
+          return;
+        }
+        socket.close((error) => (error ? reject(error) : resolve(address.port)));
+      });
+    });
+    const url = `http://${host}:${port}`;
     let exit: string | undefined;
     const child: ChildProcess = spawn(
       path.join(root, 'work/bin/puffolio'),
-      ['serve', '--data-dir', dir, '--addr', `127.0.0.1:${port}`],
+      ['serve', '--data-dir', dir, '--addr', `${host}:${port}`],
       {
         cwd: root,
-        env: { ...process.env, PUFFOLIO_BASE_URL: url, PUFFOLIO_COOKIE_SECURE: 'false' },
+        env: {
+          ...process.env,
+          PUFFOLIO_BASE_URL: url,
+          PUFFOLIO_COOKIE_SECURE: 'false',
+        },
         stdio: ['ignore', 'ignore', 'pipe'],
       },
     );

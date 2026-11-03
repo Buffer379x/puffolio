@@ -8,6 +8,13 @@ Palettenfarben, bereinigte Bildmaster und Ausschnitte sowie gespeicherte
 Ansichten, Dashboard und eigene Darstellungspräferenzen. Zugangsdaten und
 fremde Sammlungen gehören nicht zum Sammlungsexport.
 
+Auf der Liquidseite lassen sich ausgewählte Liquids über „Auswahl exportieren“
+übertragen (bis zu 500 pro Export). Alle Felddefinitionen, Tags, Vorgaben und
+Ansichtseinstellungen bleiben enthalten; Bilder stammen nur aus der Auswahl
+oder den Feldvorgaben. Andere Liquids und deren zusätzliche Bilder fehlen.
+„Gesamte Sammlung exportieren“ und Einstellungen → Daten exportieren weiterhin
+alle eigenen Liquids.
+
 Der Import hat zwei Schritte: Datei prüfen und die angezeigte Vorschau
 bestätigen. Er importiert Puffolio-Exporte, keine beliebigen CSV-Dateien.
 IDs werden auf die Zielsammlung abgebildet; ein Import überschreibt nicht
@@ -86,6 +93,13 @@ schreibend nutzt. Der Unterbefehl `reset-password --username NAME` liest das
 neue Passwort über die lokale Eingabe; Geheimnisse nicht als Prozessargument
 in Shell-History oder Logs schreiben. Keine öffentlich abrufbaren
 Standard-Resetcodes und keine SMTP-Abhängigkeit.
+
+Das gilt auch für verlorene oder abgelaufene Einladungen und für noch nicht
+aktivierte Konten nach einem Restore: `reset-password --username NAME`
+aktiviert das bestehende Konto vollständig. Fehlende Darstellungspräferenzen
+und ein Startdashboard werden angelegt; vorhandene Einstellungen und Daten
+bleiben erhalten. Alte Einladungslinks und Sitzungen werden ungültig. Danach
+kann sich die Person mit dem Benutzernamen und dem neuen Passwort anmelden.
 
 ## Update und Rollback
 

@@ -1,7 +1,7 @@
 import type { Field, Filter, Scalar, Tag } from '../../app/types';
 import { FieldInput } from '../../components/FieldInput';
 import { Button, IconButton } from '../../components/ui';
-const labels: Record<string, string> = {
+export const filterOperatorLabels: Record<string, string> = {
   eq: 'Gleich',
   contains: 'Enthält',
   empty: 'Fehlt',
@@ -116,13 +116,17 @@ export function FilterBuilder({
               aria-label={`Operator ${i + 1}`}
               value={c.operator}
               onChange={(e) =>
-                change({ operator: e.target.value, value: undefined, value2: undefined })
+                change({
+                  operator: e.target.value,
+                  value: undefined,
+                  value2: undefined,
+                })
               }
             >
               {(c.fieldId === 'favorite' ? ['eq'] : allowedOperators(field?.type || 'image')).map(
                 (op) => (
                   <option key={op} value={op}>
-                    {labels[op]}
+                    {filterOperatorLabels[op]}
                   </option>
                 ),
               )}

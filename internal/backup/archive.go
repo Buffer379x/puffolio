@@ -64,6 +64,31 @@ type Collection struct {
 
 func WebLimits() Limits { return Limits{100 << 20, 10000, 5000} }
 func Export(ctx context.Context, s *store.Store, cid string, w io.Writer, version string) error {
+	return exportCollection(ctx, s, cid, w, version, nil)
+}
+
+// ExportSelected validates the entire bounded selection before writing any archive
+// bytes. The full field/tag schema and view configuration remain portable.
+func ExportSelected(ctx context.Context, s *store.Store, cid string, w io.Writer, version string, ids []string) error {
+	if len(ids) == 0 || len(ids) > 500 {
+		return fault.Validation("Auswahl muss 1 bis 500 Liquids enthalten")
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			return fault.Validation("Ungültige oder doppelte Liquid-ID")
+		}
+		seen[id] = true
+		var owned string
+		if e := s.DB.QueryRowContext(ctx, "SELECT id FROM liquids WHERE collection_id=? AND id=?", cid, id).Scan(&owned); e == sql.ErrNoRows {
+			return fault.NotFound()
+		} else if e != nil {
+			return e
+		}
+	}
+	return exportCollection(ctx, s, cid, w, version, ids)
+}
+func exportCollection(ctx context.Context, s *store.Store, cid string, w io.Writer, version string, selected []string) error {
 	var c Collection
 	c.SchemaVersion = store.SchemaVersion
 	c.Tags = []fields.Tag{}
@@ -84,24 +109,56 @@ func Export(ctx context.Context, s *store.Store, cid string, w io.Writer, versio
 			c.Tags = append(c.Tags, tags...)
 		}
 	}
-	rows, e := s.DB.QueryContext(ctx, "SELECT id FROM liquids WHERE collection_id=? ORDER BY id", cid)
-	if e != nil {
-		return e
-	}
-	ids := []string{}
-	for rows.Next() {
-		var id string
-		if e = rows.Scan(&id); e != nil {
-			rows.Close()
+	ids := append([]string{}, selected...)
+	if selected == nil {
+		rows, e := s.DB.QueryContext(ctx, "SELECT id FROM liquids WHERE collection_id=? ORDER BY id", cid)
+		if e != nil {
 			return e
 		}
-		ids = append(ids, id)
+		ids = []string{}
+		for rows.Next() {
+			var id string
+			if e = rows.Scan(&id); e != nil {
+				rows.Close()
+				return e
+			}
+			ids = append(ids, id)
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return e
+		}
+
+	} else {
+		sort.Strings(ids)
 	}
-	e = rows.Err()
-	rows.Close()
-	if e != nil {
-		return e
+	neededMedia := map[string]bool{}
+	if selected != nil {
+		for _, d := range c.Fields {
+			if d.Type == "image" {
+				var id string
+				if json.Unmarshal(d.Config.DefaultValue, &id) == nil && id != "" {
+					neededMedia[id] = true
+				}
+			}
+		}
+		for _, id := range ids {
+			l, e := liquids.Get(ctx, s.DB, cid, id)
+			if e != nil {
+				return e
+			}
+			for _, v := range l.Values {
+				if v.Type == "image" {
+					var mid string
+					if json.Unmarshal(v.Value, &mid) == nil && mid != "" {
+						neededMedia[mid] = true
+					}
+				}
+			}
+		}
 	}
+	var rows *sql.Rows
 	rows, e = s.DB.QueryContext(ctx, "SELECT data FROM media WHERE collection_id=? ORDER BY id", cid)
 	if e != nil {
 		return e
@@ -117,7 +174,9 @@ func Export(ctx context.Context, s *store.Store, cid string, w io.Writer, versio
 			rows.Close()
 			return e
 		}
-		c.Media = append(c.Media, m)
+		if selected == nil || neededMedia[m.ID] {
+			c.Media = append(c.Media, m)
+		}
 	}
 	e = rows.Err()
 	rows.Close()

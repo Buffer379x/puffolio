@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/Buffer379x/puffolio/internal/auth"
 	"github.com/Buffer379x/puffolio/internal/backup"
 	"github.com/Buffer379x/puffolio/internal/fault"
@@ -56,7 +57,22 @@ func (s *server) download(w http.ResponseWriter, r *http.Request, name string, c
 	return nil
 }
 func (s *server) export(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		IDs json.RawMessage `json:"ids,omitempty"`
+	}
+	if e := decode(w, r, &in); e != nil {
+		return e
+	}
+	var ids []string
+	if len(in.IDs) > 0 {
+		if e := json.Unmarshal(in.IDs, &ids); e != nil || ids == nil {
+			return fault.Validation("Liquid-Auswahl muss eine Liste sein")
+		}
+	}
 	return s.download(w, r, "puffolio-collection.zip", func(out io.Writer) error {
+		if len(in.IDs) > 0 {
+			return backup.ExportSelected(r.Context(), s.Store, current(r).User.CollectionID, out, s.Version, ids)
+		}
 		return backup.Export(r.Context(), s.Store, current(r).User.CollectionID, out, s.Version)
 	})
 }

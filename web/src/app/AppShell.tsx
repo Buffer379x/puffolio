@@ -15,10 +15,10 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
   const sidebar = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const a = useAction();
   const close = () => {
     setOpen(false);
-    toggle.current?.focus();
   };
   useEffect(() => {
     const media = matchMedia('(max-width: 900px)');
@@ -34,10 +34,16 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
   useEffect(() => {
     const el = sidebar.current;
     if (!el) return;
+    if (mobile && open && !returnFocus.current)
+      returnFocus.current = document.activeElement as HTMLElement | null;
     el.inert = mobile && !open;
     if (content.current) content.current.inert = mobile && open;
-    if (!mobile || !open) return;
-    const previous = document.activeElement as HTMLElement | null;
+    if (!mobile || !open) {
+      const previous = returnFocus.current;
+      returnFocus.current = null;
+      if (previous?.isConnected && !previous.closest('[inert]')) previous.focus();
+      return;
+    }
     el.querySelector<HTMLButtonElement>('button')?.focus();
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -62,7 +68,6 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
     el.addEventListener('keydown', key);
     return () => {
       el.removeEventListener('keydown', key);
-      if (previous?.isConnected) previous.focus();
     };
   }, [mobile, open]);
   const go = (url: string) => {

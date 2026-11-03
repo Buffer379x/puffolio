@@ -8,6 +8,7 @@ import { useTags, normalizeFilter } from './data';
 import { LiquidEditor } from './LiquidEditor';
 import { LiquidDetail } from './LiquidDetail';
 import { FilterBuilder } from './FilterBuilder';
+import { FilterChips } from './FilterChips';
 import { FieldValue } from '../../components/FieldValue';
 import { TagsInput } from '../../components/FieldInput';
 import { saveBlob } from '../fields/values';
@@ -30,14 +31,21 @@ export function LiquidsPage({ query }: { query: string }) {
   const q = readView(query);
   if (!new URLSearchParams(query).has('view')) q.view = preferences.view;
   const [search, setSearch] = useState(q.search);
-  const [editing, setEditing] = useState<{ liquid?: Liquid; duplicate?: boolean }>();
+  const [editing, setEditing] = useState<{
+    liquid?: Liquid;
+    duplicate?: boolean;
+  }>();
   const [detail, setDetail] = useState<Liquid>();
   const [filters, setFilters] = useState<Filter>();
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewDraft, setViewDraft] = useState(preferences);
   const viewState = (p: typeof preferences) =>
-    JSON.stringify({ images: p.images, listFields: p.listFields, gridFields: p.gridFields });
+    JSON.stringify({
+      images: p.images,
+      listFields: p.listFields,
+      gridFields: p.gridFields,
+    });
   const [viewInitial, setViewInitial] = useState(() => viewState(preferences));
   const viewGuard = useDraftGuard(viewOpen && viewState(viewDraft) !== viewInitial, () =>
     setViewOpen(false),
@@ -76,7 +84,10 @@ export function LiquidsPage({ query }: { query: string }) {
   };
   const favorite = (l: Liquid) =>
     void a.run(async () => {
-      await api('/liquids/' + l.id, 'PATCH', { version: l.version, favorite: !l.favorite });
+      await api('/liquids/' + l.id, 'PATCH', {
+        version: l.version,
+        favorite: !l.favorite,
+      });
       reload();
     });
   const shown = fields.filter(
@@ -197,6 +208,13 @@ export function LiquidsPage({ query }: { query: string }) {
           />
         </div>
       </div>
+      {q.sort.startsWith('field:') && (
+        <p className="sort-summary">
+          Sortiert nach:{' '}
+          {fields.find((f) => q.sort === 'field:' + f.id)?.label || 'Feld nicht verfügbar'} ·{' '}
+          {q.direction === 'asc' ? 'Aufsteigend' : 'Absteigend'}
+        </p>
+      )}
       <div className="filter-bar">
         <Button
           aria-pressed={q.favorite}
@@ -214,7 +232,12 @@ export function LiquidsPage({ query }: { query: string }) {
           <Button
             onClick={() => {
               setSearch('');
-              update({ favorite: false, filters: undefined, search: '', page: 1 });
+              update({
+                favorite: false,
+                filters: undefined,
+                search: '',
+                page: 1,
+              });
             }}
           >
             Filter zurücksetzen
@@ -245,6 +268,14 @@ export function LiquidsPage({ query }: { query: string }) {
         </select>
         <Button onClick={() => setSaveView(true)}>Ansicht speichern</Button>
       </div>
+      {q.filters && (
+        <FilterChips
+          value={q.filters}
+          fields={fields}
+          tags={tags.data || []}
+          onChange={(filters) => update({ filters, page: 1 })}
+        />
+      )}
       <ErrorMessage error={a.error || list.error || tags.error || views.error} />
       {list.error && <Button onClick={list.reload}>Erneut versuchen</Button>}
       {list.loading && <p role="status">Laden…</p>}
@@ -264,6 +295,15 @@ export function LiquidsPage({ query }: { query: string }) {
           <Button
             onClick={() =>
               void a.run(async () =>
+                saveBlob(await download('/exports', { ids: selected }), 'puffolio-auswahl.zip'),
+              )
+            }
+          >
+            Auswahl exportieren
+          </Button>
+          <Button
+            onClick={() =>
+              void a.run(async () =>
                 saveBlob(await download('/exports', {}), 'puffolio-sammlung.zip'),
               )
             }
@@ -278,7 +318,14 @@ export function LiquidsPage({ query }: { query: string }) {
           action={
             q.search || q.filters || q.favorite ? (
               <Button
-                onClick={() => update({ search: '', favorite: false, filters: undefined, page: 1 })}
+                onClick={() =>
+                  update({
+                    search: '',
+                    favorite: false,
+                    filters: undefined,
+                    page: 1,
+                  })
+                }
               >
                 Filter zurücksetzen
               </Button>
@@ -497,7 +544,10 @@ export function LiquidsPage({ query }: { query: string }) {
                 variant="primary"
                 onClick={() =>
                   void a.run(async () => {
-                    update({ filters: normalizeFilter(filters, fields), page: 1 });
+                    update({
+                      filters: normalizeFilter(filters, fields),
+                      page: 1,
+                    });
                     setFilterOpen(false);
                   })
                 }
@@ -623,7 +673,9 @@ export function LiquidsPage({ query }: { query: string }) {
                 variant="danger"
                 onClick={() =>
                   void a.run(async () => {
-                    await api('/saved-views/' + v.id, 'DELETE', { version: v.version });
+                    await api('/saved-views/' + v.id, 'DELETE', {
+                      version: v.version,
+                    });
                     views.reload();
                   })
                 }
@@ -642,7 +694,10 @@ export function LiquidsPage({ query }: { query: string }) {
           onCancel={() => setBulk(undefined)}
           onConfirm={() =>
             void a.run(async () => {
-              await api('/liquids/bulk', 'POST', { ids: selected, action: 'trash' });
+              await api('/liquids/bulk', 'POST', {
+                ids: selected,
+                action: 'trash',
+              });
               setBulk(undefined);
               reload();
             })

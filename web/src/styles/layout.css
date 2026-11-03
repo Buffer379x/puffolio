@@ -383,8 +383,12 @@ main {
     gap: var(--space-2);
   }
   .toolbar-end > select {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 150px;
+    min-width: min(150px, 100%);
+    max-width: 100%;
+  }
+  .toolbar-end > .segmented {
+    flex: 0 0 auto;
   }
   .toolbar .search-box {
     flex-basis: 100%;
@@ -478,4 +482,35 @@ main {
     animation-duration: 0s;
     scroll-behavior: auto;
   }
+}
+
+.filter-chips,
+.filter-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+.filter-chips {
+  margin-bottom: var(--space-4);
+}
+.filter-chip-group {
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+.filter-group-label {
+  font-size: var(--text-sm);
+}
+.filter-chip.button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.sort-summary {
+  overflow-wrap: anywhere;
 }

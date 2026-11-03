@@ -5347,7 +5347,7 @@
     },
     "/api/v1/exports": {
       "post": {
-        "summary": "Download credential-free collectionZIP with SHA256 manifest",
+        "summary": "Download full collection or bounded selected liquids as credential-free ZIP with SHA256 manifest",
         "operationId": "post_api_v1_exports",
         "responses": {
           "200": {
@@ -5459,7 +5459,30 @@
           {
             "$ref": "#/components/parameters/CSRF"
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Optional selection; every ID must belong to the session collection. Omit for the full collection. Includes full schema/tags/settings and only selected/default images."
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/imports/preview": {

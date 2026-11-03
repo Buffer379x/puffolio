@@ -15,7 +15,7 @@ test('dynamic dates, false and zero work; required scalar backfill is explicit',
   await d.getByLabel('Feldtyp').selectOption('boolean');
   await d.getByLabel('Pflichtfeld', { exact: true }).check();
   await d.getByLabel('Pflichtfeld für vorhandene Liquids').selectOption('backfill');
-  await d.getByLabel('Auffüllwert', { exact: true }).selectOption('false');
+  await d.getByRole('combobox', { name: 'Auffüllwert', exact: true }).selectOption('false');
   await d.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(d).not.toBeVisible();
   const defs = await fields(app);
@@ -26,7 +26,7 @@ test('dynamic dates, false and zero work; required scalar backfill is explicit',
   await app.page.getByRole('button', { name: 'Liquid hinzufügen', exact: true }).first().click();
   await app.page.getByLabel('Name', { exact: true }).fill('Datum und Null');
   await app.page.getByLabel('Prüfdatum', { exact: true }).fill('2028-02-29');
-  await app.page.getByLabel('Geprüft', { exact: true }).selectOption('false');
+  await app.page.getByRole('combobox', { name: 'Geprüft', exact: true }).selectOption('false');
   await app.page.getByLabel('Menge', { exact: true }).fill('0');
   await app.page.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(app.page.getByRole('dialog')).not.toBeVisible();

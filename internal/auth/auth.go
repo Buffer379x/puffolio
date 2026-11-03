@@ -190,6 +190,9 @@ func (a *Service) ConsumeInvitationInitialized(ctx context.Context, token, passw
 			return User{}, e
 		}
 	}
+	if e = InitializeUserTx(ctx, tx, u, map[string]string{}); e != nil {
+		return User{}, e
+	}
 	return u, tx.Commit()
 }
 func (a *Service) ResetPassword(ctx context.Context, username, password string) error {
@@ -202,17 +205,20 @@ func (a *Service) ResetPassword(ctx context.Context, username, password string) 
 		return e
 	}
 	defer tx.Rollback()
-	var id string
-	if e = tx.QueryRowContext(ctx, "SELECT id FROM users WHERE username=?", fields.Normalize(username)).Scan(&id); e != nil {
+	var u User
+	if e = tx.QueryRowContext(ctx, "SELECT u.id,c.id FROM users u JOIN collections c ON c.user_id=u.id WHERE u.username=?", fields.Normalize(username)).Scan(&u.ID, &u.CollectionID); e != nil {
 		return fmt.Errorf("Konto nicht gefunden")
 	}
-	if _, e = tx.ExecContext(ctx, "UPDATE users SET password_hash=?,version=version+1 WHERE id=?", hash, id); e != nil {
+	if _, e = tx.ExecContext(ctx, "UPDATE users SET password_hash=?,version=version+1 WHERE id=?", hash, u.ID); e != nil {
 		return e
 	}
-	if _, e = tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id=?", id); e != nil {
+	if _, e = tx.ExecContext(ctx, "DELETE FROM sessions WHERE user_id=?", u.ID); e != nil {
 		return e
 	}
-	if _, e = tx.ExecContext(ctx, "DELETE FROM one_time_tokens WHERE user_id=?", id); e != nil {
+	if _, e = tx.ExecContext(ctx, "DELETE FROM one_time_tokens WHERE user_id=?", u.ID); e != nil {
+		return e
+	}
+	if e = InitializeUserTx(ctx, tx, u, map[string]string{}); e != nil {
 		return e
 	}
 	return tx.Commit()

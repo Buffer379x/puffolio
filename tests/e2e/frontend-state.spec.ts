@@ -70,6 +70,10 @@ test('selected card images and primary roles obey view choices and images-off', 
     image = defs.find((f) => f.type === 'image'),
     rating = defs.find((f) => f.type === 'rating'),
     quantity = defs.find((f) => f.label === 'Menge');
+  await app.write('/fields/' + quantity.id, 'PATCH', {
+    ...quantity,
+    visibility: { ...quantity.visibility, grid: true },
+  });
   const second = await addField(app, 'Zusatzbild', 'image');
   const uploaded = await app.api.post('/api/v1/media', {
     headers: { 'X-CSRF-Token': app.csrf },
@@ -89,6 +93,8 @@ test('selected card images and primary roles obey view choices and images-off', 
   });
   await goto(app, '/liquids');
   await expect(app.page.locator('main img[src^="/api/v1/media/"]')).toHaveCount(2);
+  await expect(app.page.getByText('12,0 ml', { exact: true })).toBeVisible();
+  await expect(app.page.getByLabel('4 von 5', { exact: true })).toBeVisible();
   await app.page.getByRole('button', { name: 'Ansicht', exact: true }).click();
   const view = app.page.getByRole('dialog', { name: 'Ansicht', exact: true });
   const grid = view.getByRole('group', { name: 'Kachelfelder' });

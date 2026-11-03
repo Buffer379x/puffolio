@@ -1,5 +1,5 @@
 import { useDraftGuard } from '../../components/useDraftGuard';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { api, download } from '../../app/api';
 import { useApp, useAction, useLoad } from '../../app/state';
 import type { User } from '../../app/types';
@@ -20,6 +20,8 @@ function UserEditor({
   const [disabled, setDisabled] = useState(!!user?.disabled);
   const [link, setLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copyMessage, setCopyMessage] = useState('');
+  const linkInput = useRef<HTMLInputElement>(null);
   const guard = useDraftGuard(
     !link &&
       (username !== (user?.username || '') ||
@@ -76,6 +78,7 @@ function UserEditor({
           <p>24 Stunden gültig. Dieser Link wird nur jetzt angezeigt.</p>
           <input
             aria-label="Einladungslink"
+            ref={linkInput}
             readOnly
             value={link}
             onFocus={(e) => e.target.select()}
@@ -83,13 +86,23 @@ function UserEditor({
           <Button
             onClick={() =>
               void a.run(async () => {
-                await navigator.clipboard.writeText(link);
-                setCopied(true);
+                try {
+                  if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+                  await navigator.clipboard.writeText(link);
+                  setCopied(true);
+                  setCopyMessage('');
+                } catch {
+                  setCopied(false);
+                  linkInput.current?.focus();
+                  linkInput.current?.select();
+                  setCopyMessage('Link markiert. Bitte manuell kopieren.');
+                }
               })
             }
           >
             {copied ? 'Kopiert' : 'Link kopieren'}
           </Button>
+          {copyMessage && <p role="status">{copyMessage}</p>}
         </>
       ) : (
         <div className="form-grid">
@@ -205,9 +218,11 @@ export function AdminPage() {
           {Object.entries(system.data || {}).map(([k, v]) => (
             <div key={k}>
               <dt>
-                {{ version: 'Version', schemaVersion: 'Datenbankschema', database: 'Datenbank' }[
-                  k
-                ] || k}
+                {{
+                  version: 'Version',
+                  schemaVersion: 'Datenbankschema',
+                  database: 'Datenbank',
+                }[k] || k}
               </dt>
               <dd>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</dd>
             </div>

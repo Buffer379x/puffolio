@@ -1,3 +1,4 @@
+import { visualLineCount } from '../../web/src/test/textGeometry';
 import { test, expect, fields, addField, addLiquid, goto } from './fixtures';
 test('visible labels and grouped field descriptions work with native controls', async ({ app }) => {
   await addField(app, 'Heute-Datum', 'date', { defaultToday: true });
@@ -45,6 +46,12 @@ test('typed table values stay unbroken, actions align and bounded scrolling reac
   app,
 }) => {
   const definitions = await fields(app);
+  for (const field of definitions.filter((f) => !f.visibility.list)) {
+    await app.write('/fields/' + field.id, 'PATCH', {
+      ...field,
+      visibility: { ...field.visibility, list: true },
+    });
+  }
   const values: Record<string, unknown> = {};
   for (const f of definitions) {
     let value: unknown;
@@ -70,8 +77,8 @@ test('typed table values stay unbroken, actions align and bounded scrolling reac
     await expect(app.page.getByRole('button', { name: 'Geometrie A', exact: true })).toBeVisible();
     const table = app.page.getByRole('table');
     const geometry = await table.evaluate((el) => {
-      const lines = (cell: Element) => {
-        const tops: number[] = [];
+      const textRects = (cell: Element) => {
+        const rects: { top: number; bottom: number }[] = [];
         const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
         let node: Node | null;
         while ((node = walker.nextNode())) {
@@ -79,26 +86,33 @@ test('typed table values stay unbroken, actions align and bounded scrolling reac
           const range = document.createRange();
           range.selectNodeContents(node);
           for (const rect of range.getClientRects())
-            if (rect.width > 0.5 && rect.height > 0.5) tops.push(Math.round(rect.top * 2) / 2);
+            if (rect.width > 0.5 && rect.height > 0.5)
+              rects.push({ top: rect.top, bottom: rect.bottom });
         }
-        return new Set(tops).size;
+        return rects;
       };
       return {
-        headers: Array.from(el.querySelectorAll('thead th')).map(lines),
+        headers: Array.from(el.querySelectorAll('thead th')).map(textRects),
         typed: Array.from(
           el.querySelectorAll(
             'tbody tr:first-child .cell-date,tbody tr:first-child .cell-rating,tbody tr:first-child .cell-number,tbody tr:first-child .cell-color',
           ),
-        ).map(lines),
+        ).map(textRects),
         textHeight:
           el
             .querySelector('tbody tr:first-child .cell-longtext .text-value')
             ?.getBoundingClientRect().height || 0,
       };
     });
-    expect(geometry.headers.every((count) => count <= 1)).toBe(true);
+    expect(
+      geometry.headers.every((rects) => visualLineCount(rects) <= 1),
+      JSON.stringify(geometry),
+    ).toBe(true);
     expect(geometry.typed.length).toBeGreaterThan(3);
-    expect(geometry.typed.every((count) => count === 1)).toBe(true);
+    expect(
+      geometry.typed.every((rects) => visualLineCount(rects) === 1),
+      JSON.stringify(geometry),
+    ).toBe(true);
     expect(geometry.textHeight).toBeGreaterThan(20);
     expect(geometry.textHeight).toBeLessThanOrEqual(61);
     const scroll = app.page.getByLabel('Liquidtabelle', { exact: true });

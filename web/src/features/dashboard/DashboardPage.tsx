@@ -1,3 +1,4 @@
+import { createUUID } from '../../app/uuid';
 import { useDraftGuard } from '../../components/useDraftGuard';
 import { FieldValue } from '../../components/FieldValue';
 import { useState, useEffect } from 'react';
@@ -49,10 +50,16 @@ function WidgetEditor({
 }) {
   const { fields } = useApp();
   const tags = useTags();
-  const [draft, setDraft] = useState<Widget>(
+  const [draft, setDraft] = useState<Widget>(() =>
     widget
       ? structuredClone(widget)
-      : { id: crypto.randomUUID(), type: 'count', title: titles.count, size: 'small', limit: 5 },
+      : {
+          id: createUUID(),
+          type: 'count',
+          title: titles.count,
+          size: 'small',
+          limit: 5,
+        },
   );
   const [initial] = useState(() => JSON.stringify(draft));
   const guard = useDraftGuard(JSON.stringify(draft) !== initial, onClose);
@@ -71,7 +78,10 @@ function WidgetEditor({
             variant="primary"
             onClick={() => {
               try {
-                const w = { ...draft, filters: normalizeFilter(draft.filters, fields) };
+                const w = {
+                  ...draft,
+                  filters: normalizeFilter(draft.filters, fields),
+                };
                 if (type && !referenced) throw new Error('Feld auswählen.');
                 if (w.type === 'low' && !w.threshold?.trim())
                   throw new Error('Grenzwert eingeben.');
@@ -80,7 +90,11 @@ function WidgetEditor({
                 if (w.type === 'low' && referenced && w.threshold !== undefined)
                   w.threshold = String(
                     normalizeFilter(
-                      { fieldId: referenced.id, operator: 'eq', value: w.threshold },
+                      {
+                        fieldId: referenced.id,
+                        operator: 'eq',
+                        value: w.threshold,
+                      },
                       fields,
                     )?.value,
                   );
@@ -218,10 +232,16 @@ export function DashboardPage() {
   const { fields, navigate } = useApp();
   const layout = useLoad((s) => api<Layout>('/dashboard', 'GET', undefined, s), []);
   const [draft, setDraft] = useState<Layout>();
-  const [widgetEdit, setWidgetEdit] = useState<{ widget?: Widget; index?: number }>();
+  const [widgetEdit, setWidgetEdit] = useState<{
+    widget?: Widget;
+    index?: number;
+  }>();
   const [newLiquid, setNewLiquid] = useState(false);
   const [detail, setDetail] = useState<Liquid>();
-  const [editLiquid, setEditLiquid] = useState<{ liquid: Liquid; duplicate?: boolean }>();
+  const [editLiquid, setEditLiquid] = useState<{
+    liquid: Liquid;
+    duplicate?: boolean;
+  }>();
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [drag, setDrag] = useState<number>();
   const tags = useTags();
@@ -339,7 +359,10 @@ export function DashboardPage() {
                     label={`${w.title} entfernen`}
                     icon="trash"
                     onClick={() =>
-                      setDraft({ ...draft, widgets: draft.widgets.filter((x) => x.id !== w.id) })
+                      setDraft({
+                        ...draft,
+                        widgets: draft.widgets.filter((x) => x.id !== w.id),
+                      })
                     }
                   />
                   <span className="muted">Verschieben</span>
@@ -362,14 +385,18 @@ export function DashboardPage() {
                     </button>
                   ) : (
                     <div className="stat-number">
-                      {result.value !== undefined
-                        ? formatDecimal(result.value)
-                        : result.count !== undefined
-                          ? result.count
-                          : 'Keine Daten'}
+                      {w.type === 'sum' && result.count === 0
+                        ? 'Keine Daten'
+                        : result.value !== undefined
+                          ? formatDecimal(result.value)
+                          : result.count !== undefined
+                            ? result.count
+                            : 'Keine Daten'}
                     </div>
                   )}
-                  {field?.config.unit && <span>{field.config.unit}</span>}
+                  {field?.config.unit && !(w.type === 'sum' && result.count === 0) && (
+                    <span>{field.config.unit}</span>
+                  )}
                 </div>
               ) : w.type === 'tags' ? (
                 result.tags?.length ? (
