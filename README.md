@@ -1,6 +1,9 @@
 # Puffolio
 
-<img src="assets/brand/logo.svg" alt="Puffolio" width="210">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/logo-dark.svg">
+  <img src="assets/brand/logo.svg" alt="Puffolio" width="210">
+</picture>
 
 Eine leichte, selbst gehostete Web-App zur Verwaltung persönlicher Vaping-Liquids.
 
