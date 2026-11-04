@@ -84,7 +84,7 @@ func TestStarterAccountOpensOnAUsefulDashboard(t *testing.T) {
 	for _, w := range layout["widgets"].([]any) {
 		kinds = append(kinds, w.(map[string]any)["type"].(string))
 	}
-	if strings.Join(kinds, ",") != "count,favorites,average,expired,recent,tags,dates,expiring" {
+	if strings.Join(kinds, ",") != "count,favorites,average,expired,recent,donut,dates,expiring,timeline,shelfStatus" {
 		t.Fatalf("default widgets: %v", kinds)
 	}
 	result := c.do("POST", "/api/v1/dashboard/query", map[string]any{"widgets": layout["widgets"]}, 200)

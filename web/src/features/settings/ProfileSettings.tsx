@@ -4,7 +4,7 @@ import { useApp, useAction, useDirty } from '../../app/state';
 import type { Me } from '../../app/types';
 import { Button, ErrorMessage, Panel } from '../../components/ui';
 export function ProfileSettings() {
-  const { me, setMe, preferences, savePreferences, logout } = useApp();
+  const { me, setMe, preferences, savePreferences } = useApp();
   const [displayName, setDisplayName] = useState(me.user.displayName);
   const [timezone, setTimezone] = useState(preferences.timezone);
   const [currentPassword, setCurrent] = useState('');
@@ -113,7 +113,6 @@ export function ProfileSettings() {
       </Panel>
       <ErrorMessage error={a.error} />
       {notice && <p role="status">{notice}</p>}
-      <Button onClick={() => void a.run(logout)}>Abmelden</Button>
     </>
   );
 }

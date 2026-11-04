@@ -42,12 +42,12 @@ Die Bilder zeigen die echte App mit erfundenen Beispieldaten. Sie entstehen mit
 
 Die [GitHub Releases](https://github.com/Buffer379x/puffolio/releases) enthalten
 Installationsdateien. Das fertige Image liegt in GitHubs Container Registry:
-`ghcr.io/buffer379x/puffolio:0.2.0` für `linux/amd64` und `linux/arm64`.
+`ghcr.io/buffer379x/puffolio:0.3.0` für `linux/amd64` und `linux/arm64`.
 
 ```sh
 mkdir puffolio
 cd puffolio
-curl -fsSLO https://github.com/Buffer379x/puffolio/releases/download/v0.2.0/compose.yaml
+curl -fsSLO https://github.com/Buffer379x/puffolio/releases/download/v0.3.0/compose.yaml
 mkdir data
 sudo chown 99:100 data
 sudo chmod 700 data
@@ -64,7 +64,7 @@ Die Sammlung ist für alle lesbar, die die Adresse erreichen; ändern kann nur d
 angemeldete Administrator.
 
 Für Unraid das Releaseasset
-[puffolio.xml](https://github.com/Buffer379x/puffolio/releases/download/v0.2.0/puffolio.xml)
+[puffolio.xml](https://github.com/Buffer379x/puffolio/releases/download/v0.3.0/puffolio.xml)
 verwenden. Das Template setzt Benutzer99:100, schreibgeschütztes Root-Dateisystem
 und den persistenten Appdata-Pfad. Der Container führt kein `chown` beim Start
 als Root aus. Ein Test auf einem echten Unraid-Host wird gesondert ausgewiesen;

@@ -155,3 +155,101 @@ test('moving a liquid to the trash can be undone from the confirmation', async (
   await app.page.locator('.toast').getByRole('button', { name: 'Rückgängig' }).click();
   await expect(app.page.locator('.item-card')).toHaveCount(1);
 });
+test('closing a detail leaves no focus ring around the list', async ({ app }) => {
+  await addLiquid(app, 'Fokus');
+  await goto(app, '/liquids?view=list');
+  await app.page.getByRole('button', { name: 'Fokus', exact: true }).click();
+  const detail = app.page.getByRole('dialog', { name: 'Fokus' });
+  await detail.getByRole('button', { name: 'Schließen', exact: true }).click();
+  await expect(detail).not.toBeVisible();
+  expect(
+    await app.page.evaluate(() => document.activeElement?.classList.contains('table-scroll')),
+  ).toBe(false);
+});
+test('every dashboard row fills the width, whatever the widget sizes', async ({ app }) => {
+  const size = app.page.viewportSize()!;
+  test.skip(size.width < 1200, 'Rows only mix sizes on the desktop layout');
+  const layout = await (await app.api.get('/api/v1/dashboard')).json();
+  const widget = (id: string, type: string, sizing: string) => ({
+    id,
+    type,
+    title: id,
+    size: sizing,
+  });
+  await app.write('/dashboard', 'PUT', {
+    version: layout.version,
+    widgets: [
+      widget('breit', 'recent', 'wide'),
+      widget('klein', 'count', 'small'),
+      widget('k1', 'count', 'small'),
+      widget('k2', 'count', 'small'),
+      widget('k3', 'count', 'small'),
+      widget('k4', 'count', 'small'),
+    ],
+  });
+  await goto(app, '/dashboard');
+  await expect(app.page.getByRole('heading', { name: 'k4', exact: true })).toBeVisible();
+  const boxes = await app.page
+    .locator('.widget-slot')
+    .evaluateAll((slots) => slots.map((s) => s.getBoundingClientRect().toJSON()));
+  const grid = await app.page.locator('.dashboard-grid').boundingBox();
+  const rows = new Map<number, any[]>();
+  for (const box of boxes) rows.set(box.top, [...(rows.get(box.top) || []), box]);
+  expect([...rows.values()].map((r) => r.length)).toEqual([2, 4]);
+  for (const row of rows.values())
+    expect(Math.abs(row.at(-1).right - (grid!.x + grid!.width))).toBeLessThan(1);
+});
+test('statistic widgets show donut, columns and shelf status', async ({ app }) => {
+  const defs = await fields(app);
+  const rating = defs.find((f) => f.type === 'rating');
+  const purchase = defs.find((f) => f.label === 'Kaufdatum');
+  const tags = defs.find((f) => f.type === 'tags');
+  const tag = await app.write('/fields/' + tags.id + '/tags', 'POST', {
+    name: 'Frucht',
+    paletteId: 'orange',
+  });
+  await addLiquid(app, 'Statistik', {
+    [rating.id]: { type: 'rating', value: 4 },
+    [purchase.id]: { type: 'date', value: yearsAgo(0) },
+    [tags.id]: { type: 'tags', value: [tag.id] },
+  });
+  const layout = await (await app.api.get('/api/v1/dashboard')).json();
+  await app.write('/dashboard', 'PUT', {
+    version: layout.version,
+    widgets: [
+      ...layout.widgets,
+      { id: 'noten', type: 'ratings', title: 'Noten', size: 'medium', fieldId: rating.id },
+      { id: 'beste', type: 'top', title: 'Beste', size: 'medium', fieldId: rating.id, limit: 3 },
+    ],
+  });
+  await goto(app, '/dashboard');
+  const panel = (name: string) =>
+    app.page
+      .locator('.panel')
+      .filter({ has: app.page.getByRole('heading', { name, exact: true }) });
+  await expect(panel('Tags').locator('.donut circle')).toHaveCount(1);
+  await expect(panel('Tags').locator('.chart-legend')).toContainText('Frucht');
+  await expect(panel('Käufe pro Monat').locator('.column')).toHaveCount(12);
+  await expect(panel('Noten').locator('.column')).toHaveCount(5);
+  await expect(panel('Haltbarkeit').locator('.status-bar div')).toHaveCount(1);
+  await expect(panel('Beste')).toContainText('Statistik');
+  // Hidden chart tables must not stretch the page.
+  expect(
+    await app.page.evaluate(
+      () =>
+        document.documentElement.scrollHeight -
+        Math.max(
+          innerHeight,
+          document.querySelector('main')!.getBoundingClientRect().bottom + scrollY,
+        ),
+    ),
+  ).toBeLessThanOrEqual(1);
+  await panel('Tags')
+    .getByRole('button', { name: /Frucht/ })
+    .click();
+  await expect(app.page.getByRole('heading', { name: 'Liquids', exact: true })).toBeVisible();
+  await expect(app.page.getByRole('button', { name: 'Frucht' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});

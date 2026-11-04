@@ -132,7 +132,12 @@ export type WidgetType =
   | 'tags'
   | 'dates'
   | 'expired'
-  | 'expiring';
+  | 'expiring'
+  | 'donut'
+  | 'ratings'
+  | 'shelfStatus'
+  | 'timeline'
+  | 'top';
 export interface Widget {
   id: string;
   type: WidgetType;
@@ -151,11 +156,18 @@ export interface Layout {
   version: number;
   widgets: Widget[];
 }
+export interface Segment {
+  id: string;
+  label: string;
+  count: number;
+  paletteId?: string;
+}
 export interface WidgetResult {
   id: string;
   value?: string;
   count?: number;
   items?: Liquid[];
   tags?: { id: string; name: string; paletteId: string; count: number }[];
+  segments?: Segment[];
   error?: string;
 }

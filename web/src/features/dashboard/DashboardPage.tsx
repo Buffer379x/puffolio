@@ -36,6 +36,7 @@ import { LiquidDetail } from '../liquids/LiquidDetail';
 import { FilterBuilder } from '../liquids/FilterBuilder';
 import { normalizeFilter, useTags } from '../liquids/data';
 import { useToast } from '../../components/toast';
+import { ColumnChart, DonutChart, ShelfStatusChart } from './charts';
 const titles: Record<WidgetType, string> = {
   count: 'Anzahl Liquids',
   favorites: 'Favoriten',
@@ -46,14 +47,23 @@ const titles: Record<WidgetType, string> = {
   recent: 'Zuletzt hinzugefügt',
   low: 'Unter Grenzwert',
   tags: 'Tag-Verteilung',
+  donut: 'Kreisdiagramm',
+  ratings: 'Bewertungsverteilung',
+  shelfStatus: 'Haltbarkeit im Überblick',
+  timeline: 'Pro Monat',
+  top: 'Bestbewertet',
   dates: 'Datumsliste',
 };
-const fieldType: Partial<Record<WidgetType, string>> = {
-  sum: 'number',
-  average: 'rating',
-  low: 'number',
-  tags: 'tags',
-  dates: 'date',
+const fieldTypes: Partial<Record<WidgetType, string[]>> = {
+  sum: ['number'],
+  average: ['rating'],
+  low: ['number'],
+  tags: ['tags'],
+  dates: ['date'],
+  donut: ['tags', 'select', 'text', 'rating', 'boolean'],
+  ratings: ['rating'],
+  timeline: ['date'],
+  top: ['rating', 'number'],
 };
 const statIcons: Partial<Record<WidgetType, string>> = {
   count: 'liquids',
@@ -87,7 +97,7 @@ function WidgetEditor({
   const [initial] = useState(() => JSON.stringify(draft));
   const guard = useDraftGuard(JSON.stringify(draft) !== initial, onClose);
   const [error, setError] = useState<unknown>();
-  const type = fieldType[draft.type];
+  const types = fieldTypes[draft.type];
   const referenced = fields.find((f) => f.id === draft.fieldId && !f.archived);
   const patch = (p: Partial<Widget>) => setDraft({ ...draft, ...p });
   return (
@@ -105,7 +115,7 @@ function WidgetEditor({
                   ...draft,
                   filters: normalizeFilter(draft.filters, fields),
                 };
-                if (type && !referenced) throw new Error('Feld auswählen.');
+                if (types && !referenced) throw new Error('Feld auswählen.');
                 if (w.type === 'low' && !w.threshold?.trim())
                   throw new Error('Grenzwert eingeben.');
                 if (w.type === 'dates' && !w.window && (!w.from || !w.to || w.from > w.to))
@@ -143,7 +153,12 @@ function WidgetEditor({
               patch({
                 type: t,
                 title: titles[t],
-                fieldId: t === 'dates' ? preferences.roles.purchase : undefined,
+                fieldId:
+                  t === 'dates' || t === 'timeline'
+                    ? preferences.roles.purchase
+                    : t === 'ratings' || t === 'top' || t === 'average'
+                      ? preferences.roles.rating
+                      : undefined,
                 window: t === 'dates' ? 'past' : undefined,
               });
             }}
@@ -176,7 +191,7 @@ function WidgetEditor({
             onChange={(e) => patch({ title: e.target.value })}
           />
         </label>
-        {type && (
+        {types && (
           <label className="form-field full">
             Feld
             <select
@@ -186,7 +201,7 @@ function WidgetEditor({
             >
               <option value="">Feld auswählen</option>
               {fields
-                .filter((f) => !f.archived && f.type === type)
+                .filter((f) => !f.archived && types.includes(f.type))
                 .map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.label}
@@ -195,7 +210,7 @@ function WidgetEditor({
             </select>
           </label>
         )}
-        {['recent', 'low', 'tags', 'dates', 'expiring'].includes(draft.type) && (
+        {['recent', 'low', 'tags', 'dates', 'expiring', 'donut', 'top'].includes(draft.type) && (
           <label className="form-field">
             Einträge
             <select
@@ -415,16 +430,17 @@ function RowList({
     </ul>
   );
 }
+function openTag(navigate: (url: string) => void, fieldId: string | undefined, id: string) {
+  const filter: Filter = {
+    op: 'and',
+    conditions: [{ fieldId, operator: 'any', value: [id] }],
+  };
+  navigate('/liquids?filters=' + encodeURIComponent(JSON.stringify(filter)));
+}
 function TagBars({ result, fieldId }: { result: WidgetResult; fieldId?: string }) {
   const { navigate } = useApp();
   const max = Math.max(...result.tags!.map((t) => t.count));
-  const open = (id: string) => {
-    const filter: Filter = {
-      op: 'and',
-      conditions: [{ fieldId, operator: 'any', value: [id] }],
-    };
-    navigate('/liquids?filters=' + encodeURIComponent(JSON.stringify(filter)));
-  };
+  const open = (id: string) => openTag(navigate, fieldId, id);
   return (
     <ul className="tag-chart">
       {result.tags!.map((t) => (
@@ -450,7 +466,7 @@ function TagBars({ result, fieldId }: { result: WidgetResult; fieldId?: string }
   );
 }
 export function DashboardPage() {
-  const { fields, preferences } = useApp();
+  const { fields, preferences, navigate } = useApp();
   const canEdit = useCanEdit();
   const toast = useToast();
   const layout = useLoad((s) => api<Layout>('/dashboard', 'GET', undefined, s), []);
@@ -595,6 +611,51 @@ export function DashboardPage() {
                   <p className="muted">Keine Daten.</p>
                 ) : isStat ? (
                   <StatBody widget={w} result={result} field={field} />
+                ) : w.type === 'donut' ? (
+                  result.segments?.some((x) => x.count) ? (
+                    <DonutChart
+                      title={title}
+                      segments={result.segments.filter((x) => x.count)}
+                      totalLabel={field?.type === 'tags' ? 'Zuordnungen' : 'Liquids'}
+                      onSelect={
+                        field?.type === 'tags'
+                          ? (segment) => openTag(navigate, w.fieldId, segment.id)
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <p className="muted">Keine Daten.</p>
+                  )
+                ) : w.type === 'ratings' ? (
+                  result.count ? (
+                    <ColumnChart
+                      title={title}
+                      segments={result.segments || []}
+                      showValues
+                      describe={(x) =>
+                        `${x.label} ${x.label === '1' ? 'Stern' : 'Sterne'}: ${x.count}`
+                      }
+                    />
+                  ) : (
+                    <p className="muted">Keine Daten.</p>
+                  )
+                ) : w.type === 'timeline' ? (
+                  result.count ? (
+                    <ColumnChart
+                      title={title}
+                      segments={result.segments || []}
+                      labelEvery={3}
+                      describe={(x) => `${x.label}: ${x.count}`}
+                    />
+                  ) : (
+                    <p className="muted">Keine Daten in den letzten 12 Monaten.</p>
+                  )
+                ) : w.type === 'shelfStatus' ? (
+                  result.count ? (
+                    <ShelfStatusChart title={title} segments={result.segments || []} />
+                  ) : (
+                    <p className="muted">Keine Daten.</p>
+                  )
                 ) : w.type === 'tags' ? (
                   result.tags?.length ? (
                     <TagBars result={result} fieldId={w.fieldId} />

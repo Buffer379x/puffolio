@@ -71,7 +71,7 @@ sudo chmod 700 recovery recovery/restored
 docker run --rm --user 99:100 --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
-  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.2.0 \
+  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.3.0 \
   restore --from /restore/puffolio-backup.zip --data-dir /restore/restored
 ```
 

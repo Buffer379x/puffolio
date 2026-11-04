@@ -58,7 +58,7 @@ try {
     const suffix = scheme === 'dark' ? '' : '-hell';
     const { context, page } = await session({ viewport: DESKTOP, colorScheme: scheme });
     await open(page, '/dashboard');
-    await fitHeight(page, DESKTOP.width, 1200);
+    await fitHeight(page, DESKTOP.width, 1700);
     await shot(page, 'dashboard' + suffix);
     await page.setViewportSize(DESKTOP);
     await open(page, '/liquids?view=grid');

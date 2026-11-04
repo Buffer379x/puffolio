@@ -28,6 +28,7 @@ Tastatur und in beiden Farbschemata geprüft.
 | `LiquidImage` | Einziger Bildplatz: quadratisch, gefüllt, Thumbnail außer im Detail; ohne Foto Flasche in der Liquidfarbe |
 | `ShelfBar` | Haltbarkeit: Länge und Farbe aus dem Restanteil, Grün bis Rot, immer mit Text („80 %“, „Abgelaufen“) |
 | `Stars` | Lesende Bewertung; keine Bewertung ist „—“, nie null Sterne |
+| `DonutChart`, `ColumnChart`, `ShelfStatusChart` | Diagramme ohne Bibliothek: Legende mit Zahlen, Tabelle für Screenreader, Serienfarben aus `--series-*` |
 | `Dialog`, `Confirm` | Einzige Überlagerungen; mobil bildschirmfüllend für Liquidformulare |
 | `useToast` | Bestätigung ohne sichtbare Änderung sowie „Rückgängig“ |
 
