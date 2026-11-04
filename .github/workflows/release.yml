@@ -63,27 +63,19 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Refuse existing release; detect an interrupted image push
+      - name: Check authenticated GitHub tag and registry manifest
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
+        run: python3 docs/scripts/release-preflight.py
+      - name: Validate existing immutable image before resuming
+        if: steps.version.outputs.exists == 'true'
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          EXISTING_DIGEST: ${{ steps.version.outputs.digest }}
         run: |
-          mkdir -p work/release
-          if gh api repos/Buffer379x/puffolio/git/ref/tags/v0.1.0 >/dev/null 2>work/release/tag-error; then
-            echo 'v0.1.0 already exists; never overwrite a release.' >&2
-            exit 1
-          fi
-          grep -q 'HTTP 404' work/release/tag-error
-          if docker buildx imagetools inspect ghcr.io/buffer379x/puffolio:0.1.0 --format '{{.Manifest.Digest}}' >work/release/existing-digest 2>work/release/image-error; then
-            digest=$(cat work/release/existing-digest)
-            python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio \
-              --source-sha '${{ inputs.source_sha }}' --expected-digest "$digest" --output work/release/index.json
-            echo 'exists=true' >> "$GITHUB_OUTPUT"
-            echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          else
-            grep -Eiq 'manifest unknown|NAME_UNKNOWN|MANIFEST_UNKNOWN' work/release/image-error
-            echo 'exists=false' >> "$GITHUB_OUTPUT"
-          fi
+          python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio \
+            --source-sha "$SOURCE_SHA" --expected-digest "$EXISTING_DIGEST" --output work/release/index.json
       - name: Publish exact version and build attestations
         if: steps.version.outputs.exists != 'true'
         id: build
