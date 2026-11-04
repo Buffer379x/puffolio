@@ -72,7 +72,7 @@ it.each(['grid', 'list'])(
     );
     const edit = () =>
       view === 'grid'
-        ? screen.getByRole('button', { name: 'Bearbeiten' })
+        ? screen.getByRole('button', { name: /bearbeiten$/ })
         : screen.getByRole('button', { name: /bearbeiten$/ });
     await screen.findByRole('button', { name: 'Original' });
     fireEvent.click(edit());

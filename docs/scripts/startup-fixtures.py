@@ -40,7 +40,7 @@ def check(root):
             assert db.execute('PRAGMA user_version').fetchone()[0] == 1
             assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
             assert db.execute('SELECT count(*) FROM schema_migrations WHERE version=1').fetchone()[0] == 1
-    print('PASS synthetic schema0 initialization, schema1 reopen, denied permissions and newer-schema preservation; real previous-release upgrade N/A (first release)')
+    print('PASS synthetic schema0 initialization, schema1 reopen, denied permissions and newer-schema preservation')
 
 
 def main():

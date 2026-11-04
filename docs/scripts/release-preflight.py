@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only, status-based GitHub/GHCR preflight for immutable Puffolio 0.1.0."""
+"""Read-only, status-based GitHub/GHCR preflight for an immutable Puffolio release."""
 import base64
 import hashlib
 import json
@@ -84,9 +84,9 @@ def json_object(stage, status, body):
     return payload
 
 
-def probe_release(http, actor, credential, log=print, repository='Buffer379x/puffolio', reference='0.1.0'):
+def probe_release(http, actor, credential, log=print, repository='Buffer379x/puffolio', reference=''):
     if (not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}', repository)
-            or reference != '0.1.0'
+            or not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', reference)
             or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,99}(?:\[bot\])?', actor)
             or not credential or len(credential) > 8192
             or any(ord(char) < 33 or ord(char) > 126 for char in credential)):
@@ -170,7 +170,8 @@ def main(http=None, environ=None, stdout=None, stderr=None):
     stderr = sys.stderr if stderr is None else stderr
     try:
         result = probe_release(http or HTTPSGet(), environ.get('GITHUB_ACTOR', ''), environ.get('GH_TOKEN', ''),
-                               lambda message: print(message, file=stdout))
+                               lambda message: print(message, file=stdout),
+                               reference=environ.get('RELEASE_VERSION', ''))
         if environ.get('GITHUB_OUTPUT'):
             with Path(environ['GITHUB_OUTPUT']).open('a') as output:
                 output.write('exists=' + str(result['exists']).lower() + '\n')

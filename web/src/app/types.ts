@@ -46,7 +46,7 @@ export interface User {
   id: string;
   username: string;
   displayName: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'visitor';
   version: number;
   disabled?: boolean;
 }
@@ -64,6 +64,8 @@ export interface Liquid {
   updatedAt: string;
   deletedAt?: string;
   values: Values;
+  /** Derived by the server; absent when no bar applies. */
+  shelfLife?: { percent: number; expiresOn: string; expired: boolean };
 }
 export interface Page<T> {
   items: T[];
@@ -79,7 +81,13 @@ export interface Preferences {
   images: boolean;
   listFields: string[];
   gridFields: string[];
-  roles: Partial<Record<'image' | 'rating' | 'color' | 'quantity', string>>;
+  roles: Partial<
+    Record<'image' | 'rating' | 'color' | 'purchase' | 'shelfOverride' | 'status', string>
+  >;
+  /** Default storage time from the purchase date; a liquid may override it. */
+  shelfLifeMonths: number;
+  /** Option of the status field that means used up: no bar, never expired. */
+  consumedOption?: string;
 }
 export interface Filter {
   op?: 'and' | 'or';
@@ -115,7 +123,16 @@ export interface Media {
   thumbnailUrl: string;
 }
 export type WidgetType =
-  'count' | 'sum' | 'favorites' | 'average' | 'recent' | 'low' | 'tags' | 'dates';
+  | 'count'
+  | 'sum'
+  | 'favorites'
+  | 'average'
+  | 'recent'
+  | 'low'
+  | 'tags'
+  | 'dates'
+  | 'expired'
+  | 'expiring';
 export interface Widget {
   id: string;
   type: WidgetType;
@@ -127,6 +144,7 @@ export interface Widget {
   inclusive?: boolean;
   from?: string;
   to?: string;
+  window?: 'past' | 'upcoming';
   filters?: Filter;
 }
 export interface Layout {

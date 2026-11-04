@@ -3,13 +3,11 @@ export interface NicotineInput {
   aromaMl: string;
   shotsMl: string;
   concentration: string;
-  concentrationUnit: 'mg/l' | 'mg/ml';
 }
 export interface NicotineResult {
   finalMl: string;
   baseMl: string;
   strengthMgMl: string;
-  strengthMgL: string;
   totalNicotineMg: string;
 }
 
@@ -39,19 +37,15 @@ export function calculateNicotine(input: NicotineInput): NicotineResult {
   if (bottle === 0n) throw new Error('Flaschenmenge muss größer als 0 ml sein.');
   if (aroma + shots > bottle)
     throw new Error('Aroma und Nikotinshots überschreiten die Flaschenmenge.');
-  if (!['mg/l', 'mg/ml'].includes(input.concentrationUnit))
-    throw new Error('Einheit der Shotstärke auswählen.');
-  let concentration =
+  const concentration =
     shots === 0n && !String(input.concentration ?? '').trim()
       ? 0n
       : decimal(input.concentration, 'Stärke der Shots');
-  if (input.concentrationUnit === 'mg/ml') concentration *= 1000n;
   const mass = shots * concentration;
   return {
     finalMl: fixed(bottle),
     baseMl: fixed(bottle - aroma - shots),
-    strengthMgL: fixed(round(mass, bottle)),
-    strengthMgMl: fixed(round(mass, bottle * 1000n)),
-    totalNicotineMg: fixed(round(mass, 1000000n)),
+    strengthMgMl: fixed(round(mass, bottle)),
+    totalNicotineMg: fixed(round(mass, 1000n)),
   };
 }

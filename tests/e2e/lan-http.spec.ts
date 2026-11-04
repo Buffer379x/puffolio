@@ -1,8 +1,6 @@
 import { test, expect, goto } from './fixtures';
 test.use({ lanHTTP: true });
-test('direct LAN HTTP creates widgets and options and offers manual invitation copying', async ({
-  app,
-}) => {
+test('direct LAN HTTP creates widgets and options without a secure context', async ({ app }) => {
   await goto(app, '/dashboard');
   expect(new URL(app.url).hostname).not.toBe('127.0.0.1');
   const capabilities = await app.page.evaluate(() => ({
@@ -47,31 +45,4 @@ test('direct LAN HTTP creates widgets and options and offers manual invitation c
   expect(fields.items.find((f: any) => f.label === 'LAN-Auswahl')?.config.options[0].label).toBe(
     'Frucht',
   );
-  await goto(app, '/admin');
-  await app.page.getByRole('button', { name: 'Nutzer einladen', exact: true }).click();
-  dialog = app.page.getByRole('dialog', {
-    name: 'Nutzer einladen',
-    exact: true,
-  });
-  await dialog.getByLabel('Benutzername', { exact: true }).fill('lan-guest');
-  await dialog.getByLabel('Anzeigename', { exact: true }).fill('LAN-Gast');
-  await dialog.getByRole('button', { name: 'Einladung erstellen', exact: true }).click();
-  dialog = app.page.getByRole('dialog', {
-    name: 'Einladungslink',
-    exact: true,
-  });
-  const link = dialog.getByRole('textbox', {
-    name: 'Einladungslink',
-    exact: true,
-  });
-  await dialog.getByRole('button', { name: 'Link kopieren', exact: true }).click();
-  await expect(dialog.getByRole('status')).toHaveText('Link markiert. Bitte manuell kopieren.');
-  await expect(link).toBeFocused();
-  expect(
-    await link.evaluate((el) => {
-      const input = el as HTMLInputElement;
-      return input.selectionStart === 0 && input.selectionEnd === input.value.length;
-    }),
-  ).toBe(true);
-  await expect(dialog.getByRole('button', { name: 'Kopiert', exact: true })).toHaveCount(0);
 });

@@ -16,24 +16,22 @@ sudo chmod 700 data
 docker compose -f compose.yaml up -d
 ```
 
-Weboberfläche: `http://localhost:8787`. Bei Zugriff über einen anderen Host die
-exakte externe Origin einstellen, beispielsweise:
+Weboberfläche: `http://localhost:8787` oder die Adresse des Servers, zum Beispiel
+`http://192.168.1.10:8787`. Es muss keine Adresse vorab eingestellt werden. Kein
+Unterpfadbetrieb. Den einmaligen Setup-Code zeigt das Container-Log:
 
 ```sh
-PUFFOLIO_BASE_URL=http://192.168.1.10:8787 docker compose -f compose.yaml up -d
+docker logs puffolio 2>&1 | grep "setup code"
 ```
 
-Die Origin enthält Schema, Host und gegebenenfalls Port. Sie wird für die
-Prüfung schreibender Browseranfragen verwendet. Kein Unterpfadbetrieb in
-Version 0.1.0. Nach dem Start den einmaligen Setup-Code lokal lesen:
+Er steht außerdem in `data/setup-code`.
 
-```sh
-sudo cat data/setup-code
-```
+Den Code im Setup eingeben und das Administratorkonto anlegen. Den Setup-Code
+nicht weitergeben. Es gibt kein Standardpasswort und keine Registrierung.
 
-Den Code im Setup eingeben, eigenes Administratorkonto anlegen und danach
-weitere Nutzer über Verwaltung einladen. Den Setup-Code nicht weitergeben.
-Es gibt kein Standardpasswort und keine offene Registrierung.
+**Sichtbarkeit:** Die Sammlung ist für alle lesbar, die die Adresse erreichen;
+bearbeiten kann nur das angemeldete Administratorkonto. Wer das nicht möchte,
+stellt Puffolio nicht öffentlich bereit oder setzt einen Zugriffsschutz davor.
 
 ## Unraid
 
@@ -41,7 +39,7 @@ Das Releaseasset `puffolio.xml` in die eigenen Docker-Templates übernehmen,
 beispielsweise auf dem Bootmedium unter
 `/boot/config/plugins/dockerMan/templates-user/puffolio.xml`. Anschließend in
 Unraid über „Add Container“ das Template Puffolio wählen. Appdata auf lokalem
-Pool-/Array-Speicher und die Basis-URL passend zum WebUI-Port einstellen.
+Pool-/Array-Speicher einstellen. Der Setup-Code steht im Log des Containers.
 
 Vor dem Start das Appdata-Verzeichnis für UID99/GID100 beschreibbar machen:
 
@@ -64,13 +62,13 @@ separat ausgewiesen.
 | --- | --- |
 | `PUFFOLIO_DATA_DIR` | `/data`, persistente Datenbank, Medien und Sicherungen |
 | `PUFFOLIO_HTTP_ADDR` | `:8080`, HTTP-Adresse im Container |
-| `PUFFOLIO_BASE_URL` | Externe Origin, z. B. `http://localhost:8787` |
+| `PUFFOLIO_BASE_URL` | Leer: die aufgerufene Adresse wird akzeptiert. Gesetzt, z. B. `https://puffolio.example`: ausschließlich diese Origin |
 | `PUFFOLIO_COOKIE_SECURE` | `false` für direktes lokales HTTP, `true` bei HTTPS |
 | `TZ` | `Europe/Berlin`, Prozesszeitzone; die persönliche Zeitzone wird getrennt im Profil gespeichert |
 | `GOMEMLIMIT` | Standardvariable der Go-Laufzeit; ohne expliziten Wert setzt die App ein Softlimit von 384 MiB und erhält ein bereits strengeres Laufzeitlimit |
 
-Bei einem HTTPS-Reverse-Proxy Basis-URL auf die externe HTTPS-Origin setzen
-und sichere Cookies aktivieren. Der Proxy muss Anfragen an Port8080
+Bei einem HTTPS-Reverse-Proxy sichere Cookies aktivieren und den `Host`-Header
+unverändert weitergeben; alternativ Basis-URL auf die externe HTTPS-Origin setzen. Der Proxy muss Anfragen an Port8080
 weitergeben. Die App benötigt keine offenen CORS-Freigaben. Sie wertet keine
 beliebigen vom Client gelieferten Proxyheader als Vertrauensnachweis aus.
 

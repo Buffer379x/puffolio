@@ -24,7 +24,7 @@ func (b *stalledAuthBody) Read([]byte) (int, error) {
 func (b *stalledAuthBody) Close() error { return nil }
 
 func TestAnonymousAuthBodyDoesNotHoldWriter(t *testing.T) {
-	for _, path := range []string{"/api/v1/auth/login", "/api/v1/auth/invite", "/api/v1/setup"} {
+	for _, path := range []string{"/api/v1/auth/login", "/api/v1/setup"} {
 		t.Run(path, func(t *testing.T) {
 			c, _ := setupClient(t)
 			// Login/invite must finish parsing before entering the shared writer boundary.
@@ -91,7 +91,7 @@ func TestPublicAuthRejectsInvalidBodiesBeforeWriter(t *testing.T) {
 	c, s := setupClient(t)
 	s.Writer.Lock()
 	defer s.Writer.Unlock()
-	for _, path := range []string{"/api/v1/auth/login", "/api/v1/auth/invite"} {
+	for _, path := range []string{"/api/v1/auth/login"} {
 		for _, test := range []struct {
 			body, contentType string
 			status            int

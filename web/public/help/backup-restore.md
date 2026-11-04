@@ -37,9 +37,9 @@ Sammlungsexport ist keine vollständige Instanzsicherung.
 
 ## Instanzsicherung
 
-Administratoren laden unter Verwaltung nach erneuter Passwortbestätigung
-eine vollständige Instanzsicherung herunter. Sie enthält alle persönlichen
-Sammlungen, Datenbank und Medien. Das Manifest enthält Versionen und
+Der Administrator lädt unter Einstellungen → Daten nach erneuter
+Passwortbestätigung eine vollständige Instanzsicherung herunter. Sie enthält
+Datenbank, Konto und Medien. Das Manifest enthält Versionen und
 Prüfsummen. Die Sicherung ist vertraulich und nicht verschlüsselt.
 
 Die App erstellt eine konsistente SQLite-Sicherung und nimmt die zugehörigen
@@ -65,13 +65,13 @@ sudo chmod 700 recovery recovery/restored
 docker run --rm --user 99:100 --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
-  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.1.0 \
+  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.2.0 \
   restore --from /restore/puffolio-backup.zip --data-dir /restore/restored
 ```
 
 4. Der Restore prüft Manifest, sichere Pfade, Prüfsummen, Schema und
    Datenbankintegrität. Bestehende Ziele werden nicht überschrieben. Alte
-   Sitzungen werden widerrufen; Nutzer melden sich erneut an.
+   Sitzungen werden widerrufen; der Administrator meldet sich erneut an.
 5. Die Bindung `/data` in Compose bzw. Unraid auf das wiederhergestellte
    Verzeichnis umstellen und mit dem passenden Image starten.
 6. Readiness, Anmeldung, Datum, Tags, Bilder einschließlich nachträglichem

@@ -10,6 +10,7 @@ spec.loader.exec_module(module)
 
 SHA = 'a' * 40
 DIGEST = 'sha256:' + 'b' * 64
+VERSION = '1.2.3'
 
 def fixtures():
     index = {'manifests': [
@@ -19,14 +20,14 @@ def fixtures():
           'annotations': {'vnd.docker.reference.type': 'attestation-manifest'}}]}
     configs = {arch: {'Os': 'linux', 'Architecture': arch, 'Config': {'Labels': {
         'org.opencontainers.image.source': 'https://github.com/Buffer379x/puffolio',
-        'org.opencontainers.image.revision': SHA, 'org.opencontainers.image.version': '0.1.0',
+        'org.opencontainers.image.revision': SHA, 'org.opencontainers.image.version': VERSION,
     }}} for arch in ['amd64', 'arm64']}
     return index, configs
 
 class ImmutableImageIdentity(unittest.TestCase):
     def test_accepts_exact_source_platforms_version_and_digest(self):
         index, configs = fixtures()
-        module.validate_identity(index, configs, SHA, DIGEST, DIGEST)
+        module.validate_identity(index, configs, SHA, DIGEST, DIGEST, VERSION)
 
     def test_refuses_digest_revision_version_source_or_platform_mismatch(self):
         for mutation in ['digest', 'revision', 'version', 'source', 'missing', 'extra', 'duplicate', 'unknown']:
@@ -41,7 +42,13 @@ class ImmutableImageIdentity(unittest.TestCase):
                 elif mutation == 'duplicate': index['manifests'].append(copy.deepcopy(index['manifests'][0]))
                 elif mutation == 'unknown': index['manifests'][-1].pop('annotations')
                 with self.assertRaises(ValueError):
-                    module.validate_identity(index, configs, SHA, DIGEST, expected)
+                    module.validate_identity(index, configs, SHA, DIGEST, expected, VERSION)
+
+    def test_refuses_a_version_that_is_not_exact(self):
+        index, configs = fixtures()
+        for version in ['latest', '1.2', '1.2.3-rc1', '1.2.3\n', '']:
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                module.validate_identity(index, configs, SHA, DIGEST, DIGEST, version)
 
 if __name__ == '__main__':
     unittest.main()

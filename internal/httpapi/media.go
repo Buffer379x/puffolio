@@ -55,6 +55,10 @@ func (s *server) getMedia(w http.ResponseWriter, r *http.Request) error {
 	if variant != "" && variant != "master" && variant != "thumbnail" {
 		return fault.Validation("Ungültige Bildvariante")
 	}
+	// Visitors see the confirmed crop; the uncropped master stays with the owner.
+	if variant == "master" && current(r).Visitor {
+		return fault.New(401, "unauthorized", "Anmeldung erforderlich")
+	}
 	f, e := os.Open(svc.Path(m.ID, variant))
 	if e != nil {
 		return e
@@ -65,7 +69,9 @@ func (s *server) getMedia(w http.ResponseWriter, r *http.Request) error {
 		return e
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", "private, no-store")
+	// Revalidated with the session on every use, so a logged-out browser or another
+	// account cannot read it from cache, yet unchanged images answer 304.
+	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Add("Vary", "Cookie")
 	http.ServeContent(w, r, m.ID+".jpg", info.ModTime(), f)
 	return nil

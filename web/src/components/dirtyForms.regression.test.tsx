@@ -3,7 +3,6 @@ import { beforeAll, afterEach, it, expect, vi } from 'vitest';
 import { AppContext } from '../app/state';
 import { TagDialog } from './FieldInput';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
-import { AdminPage } from '../features/settings/AdminPage';
 import { FieldsSettings } from '../features/fields/FieldsSettings';
 import { LiquidsPage } from '../features/liquids/LiquidsPage';
 const field = {
@@ -63,20 +62,11 @@ const cases = [
     component: () => <DashboardPage />,
     open: async () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Dashboard anpassen' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten' }));
+      fireEvent.click(screen.getByRole('button', { name: /bearbeiten$/ }));
     },
     edit: () =>
       fireEvent.change(screen.getByLabelText('Widgettitel'), { target: { value: 'Entwurf' } }),
     draft: () => expect(screen.getByLabelText('Widgettitel')).toHaveValue('Entwurf'),
-  },
-  {
-    name: 'user',
-    title: 'Nutzer bearbeiten',
-    component: () => <AdminPage />,
-    open: async () => fireEvent.click(await screen.findByRole('button', { name: 'Bearbeiten' })),
-    edit: () =>
-      fireEvent.change(screen.getByLabelText('Anzeigename'), { target: { value: 'Entwurf' } }),
-    draft: () => expect(screen.getByLabelText('Anzeigename')).toHaveValue('Entwurf'),
   },
   {
     name: 'view',
@@ -90,7 +80,7 @@ const cases = [
     name: 'field default',
     title: 'Feld bearbeiten',
     component: () => <FieldsSettings />,
-    open: async () => fireEvent.click(await screen.findByRole('button', { name: 'Bearbeiten' })),
+    open: async () => fireEvent.click(await screen.findByRole('button', { name: /bearbeiten$/ })),
     edit: () => fireEvent.click(screen.getByLabelText('Standardwert für neue Liquids')),
     draft: () => expect(screen.getByLabelText('Standardwert für neue Liquids')).not.toBeChecked(),
   },

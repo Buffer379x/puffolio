@@ -29,7 +29,8 @@ const prefs: Preferences = {
   images: true,
   listFields: fields.map((f) => f.id),
   gridFields: fields.map((f) => f.id),
-  roles: { rating: 'rating', quantity: 'quantity', image: 'primary', color: 'color' },
+  roles: { rating: 'rating', image: 'primary', color: 'color' },
+  shelfLifeMonths: 0,
 };
 const liquid = {
   id: 'liquid',
@@ -79,7 +80,7 @@ it('renders additional selected card image fields using their saved crop URL', a
   mount(prefs);
   expect(await screen.findByRole('img', { name: 'second' })).toHaveAttribute(
     'src',
-    '/api/v1/media/second-media',
+    '/api/v1/media/second-media?variant=thumbnail',
   );
 });
 it.each(['deselected', 'field-hidden', 'archived'])(
@@ -95,9 +96,8 @@ it.each(['deselected', 'field-hidden', 'archived'])(
     mount({ ...prefs, gridFields: mode === 'deselected' ? [] : prefs.gridFields }, definitions);
     await screen.findByRole('button', { name: 'Testliquid' });
     expect(screen.queryByLabelText('4 von 5')).not.toBeInTheDocument();
-    expect(screen.queryByText('12,0 ml')).not.toBeInTheDocument();
-    expect(document.querySelector('img[src="/api/v1/media/primary-media"]')).toBeNull();
-    expect(document.querySelector('img[src="/api/v1/media/second-media"]')).toBeNull();
+    expect(document.querySelector('img[src^="/api/v1/media/primary-media"]')).toBeNull();
+    expect(document.querySelector('img[src^="/api/v1/media/second-media"]')).toBeNull();
     expect(document.querySelector('[style*="rgb(18, 52, 86)"]')).toBeNull();
   },
 );

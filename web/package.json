@@ -1,7 +1,7 @@
 {
   "name": "puffolio-web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@12.16.1",
   "engines": { "node": ">=24.22.2 <25" },
@@ -10,7 +10,9 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test --config ../tests/e2e/playwright.config.ts"
+    "test:e2e": "playwright test --config ../tests/e2e/playwright.config.ts",
+    "demo": "node ../tests/demo/demo.mjs",
+    "screenshots": "node ../tests/demo/screenshots.mjs"
   },
   "dependencies": { "react": "19.3.1", "react-dom": "19.3.1" },
   "devDependencies": {

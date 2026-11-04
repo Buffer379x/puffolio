@@ -14,6 +14,10 @@ export function formatDecimal(s: string): string {
   const [whole, part] = s.split('.');
   return whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (part === undefined ? '' : ',' + part);
 }
+/** For reading, not editing: "60.0" shows as "60", while the stored scale stays exact. */
+export function formatNumber(s: string): string {
+  return formatDecimal(s.includes('.') ? s.replace(/\.?0+$/, '') : s);
+}
 export function formatDate(s: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s.slice(8) + '.' + s.slice(5, 7) + '.' + s.slice(0, 4) : s;
 }

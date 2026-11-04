@@ -55,7 +55,7 @@ func TestDummyMatchNeverAuthenticatesMissingOrPendingAccount(t *testing.T) {
 	}
 	defer s.Close()
 	a := New(s)
-	u, _, e := a.Invite(ctx, "pending-user", "Pending", "user")
+	u, e := a.CreateUser(ctx, "pending-user", "Pending", "user", "A-long-test-password")
 	if e != nil {
 		t.Fatal(e)
 	}

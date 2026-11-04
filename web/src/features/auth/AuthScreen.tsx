@@ -7,13 +7,13 @@ import { useAction } from '../../app/state';
 export function AuthScreen({
   mode,
   onSuccess,
-  token = '',
   embedded = false,
+  onBack,
 }: {
-  mode: 'setup' | 'login' | 'invite';
+  mode: 'setup' | 'login';
   onSuccess: (m: Me) => void;
-  token?: string;
   embedded?: boolean;
+  onBack?: () => void;
 }) {
   const [form, setForm] = useState({
     username: '',
@@ -24,8 +24,7 @@ export function AuthScreen({
   });
   const a = useAction();
   const update = (key: string, value: string | boolean) => setForm({ ...form, [key]: value });
-  const title =
-    mode === 'setup' ? 'Einrichten' : mode === 'invite' ? 'Einladung annehmen' : 'Anmelden';
+  const title = mode === 'setup' ? 'Einrichten' : 'Anmelden';
   return (
     <div className={embedded ? '' : 'auth-page'}>
       {!embedded && (
@@ -40,13 +39,9 @@ export function AuthScreen({
             e.preventDefault();
             void a.run(async () => {
               const result = await api<Me>(
-                mode === 'setup' ? '/setup' : mode === 'invite' ? '/auth/invite' : '/auth/login',
+                mode === 'setup' ? '/setup' : '/auth/login',
                 'POST',
-                mode === 'setup'
-                  ? form
-                  : mode === 'invite'
-                    ? { token, password: form.password, displayName: form.displayName }
-                    : { username: form.username, password: form.password },
+                mode === 'setup' ? form : { username: form.username, password: form.password },
               );
               setCSRF(result.csrfToken);
               onSuccess(result);
@@ -55,7 +50,11 @@ export function AuthScreen({
         >
           <FormGrid>
             {mode === 'setup' && (
-              <FormField label="Einrichtungscode" wide>
+              <FormField
+                label="Einrichtungscode"
+                wide
+                hint="Steht im Container-Log und in der Datei setup-code im Datenverzeichnis."
+              >
                 {(bindings) => (
                   <input
                     {...bindings}
@@ -69,21 +68,19 @@ export function AuthScreen({
                 )}
               </FormField>
             )}
-            {mode !== 'invite' && (
-              <FormField label="Benutzername" wide>
-                {(bindings) => (
-                  <input
-                    {...bindings}
-                    aria-label="Benutzername"
-                    autoComplete="username"
-                    required
-                    value={form.username}
-                    onChange={(e) => update('username', e.target.value)}
-                  />
-                )}
-              </FormField>
-            )}
-            {mode !== 'login' && (
+            <FormField label="Benutzername" wide>
+              {(bindings) => (
+                <input
+                  {...bindings}
+                  aria-label="Benutzername"
+                  autoComplete="username"
+                  required
+                  value={form.username}
+                  onChange={(e) => update('username', e.target.value)}
+                />
+              )}
+            </FormField>
+            {mode === 'setup' && (
               <FormField label="Anzeigename" wide>
                 {(bindings) => (
                   <input
@@ -126,6 +123,11 @@ export function AuthScreen({
           <Button variant="primary" type="submit" disabled={a.busy}>
             {a.busy ? 'Bitte warten…' : title}
           </Button>
+          {onBack && (
+            <button type="button" className="text-action" onClick={onBack}>
+              Ohne Anmeldung ansehen
+            </button>
+          )}
         </form>
       </Panel>
     </div>

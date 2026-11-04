@@ -22,6 +22,8 @@ type Liquid struct {
 	UpdatedAt string                  `json:"updatedAt"`
 	DeletedAt *string                 `json:"deletedAt,omitempty"`
 	Values    map[string]fields.Value `json:"values"`
+	// ShelfLife is derived on read, never stored or exported.
+	ShelfLife *ShelfLife `json:"shelfLife,omitempty"`
 }
 type Input struct {
 	Name     *string                  `json:"name"`

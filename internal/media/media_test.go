@@ -36,7 +36,7 @@ func TestCropRevisionAndBounds(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	next, e := svc.Crop(ctx, u.CollectionID, m.ID, Crop{X: 0, Y: 0, Width: 1, Height: 1})
+	next, e := svc.Crop(ctx, u.CollectionID, m.ID, Crop{X: 0, Y: 0, Width: 0.75, Height: 1})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -129,5 +129,30 @@ func TestCanceledUploadDoesNotPersistMedia(t *testing.T) {
 	s.DB.QueryRow("SELECT count(*) FROM media").Scan(&count)
 	if count != 0 {
 		t.Fatal("canceled upload persisted media")
+	}
+}
+
+func TestNewCropsAreSquareButStoredOnesMayBeFourByThree(t *testing.T) {
+	square := Crop{X: 0.125, Width: 0.75, Height: 1}
+	legacy := Crop{Width: 1, Height: 1}
+	if e := ValidateCrop(square, 1600, 1200); e != nil {
+		t.Fatal(e)
+	}
+	if e := ValidateCrop(legacy, 1600, 1200); e == nil {
+		t.Fatal("a new 4:3 crop was accepted")
+	}
+	for _, c := range []Crop{square, legacy} {
+		if e := ValidateStoredCrop(c, 1600, 1200); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if e := ValidateStoredCrop(Crop{Width: 0.5, Height: 1}, 1600, 1200); e == nil {
+		t.Fatal("a stored crop of another ratio was accepted")
+	}
+	if got := centerCrop(1600, 1200); got != square {
+		t.Fatalf("landscape default %+v", got)
+	}
+	if got := centerCrop(1200, 1600); got != (Crop{Y: 0.125, Width: 1, Height: 0.75}) {
+		t.Fatalf("portrait default %+v", got)
 	}
 }

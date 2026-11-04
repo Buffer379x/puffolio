@@ -86,31 +86,9 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.Store.Writer.Unlock()
 	u, e := s.auth.Login(r.Context(), in.Username, in.Password)
-	if e != nil {
+	// Only administrators sign in; accounts left over from 0.1.0 keep their data.
+	if e != nil || u.Role != "admin" {
 		respondError(w, fault.New(401, "login_failed", "Anmeldung fehlgeschlagen"))
-		return
-	}
-	if e = s.setSession(w, r, u, 200); e != nil {
-		respondError(w, e)
-	}
-}
-func (s *server) consumeInvite(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Token, Password, DisplayName string }
-	if e := decodeAuth(w, r, &in); e != nil {
-		respondError(w, e)
-		return
-	}
-	if !s.rateAllowed(r, "invite") {
-		respondError(w, fault.New(429, "rate_limited", "Bitte später erneut versuchen"))
-		return
-	}
-	if e := s.Store.Writer.LockContext(r.Context()); e != nil {
-		return
-	}
-	defer s.Store.Writer.Unlock()
-	u, e := s.auth.ConsumeInvitation(r.Context(), in.Token, in.Password, in.DisplayName)
-	if e != nil {
-		respondError(w, fault.Validation(e.Error()))
 		return
 	}
 	if e = s.setSession(w, r, u, 200); e != nil {
@@ -195,116 +173,6 @@ func requireAdmin(r *http.Request) error {
 	if current(r).User.Role != "admin" {
 		return fault.New(403, "forbidden", "Administration erforderlich")
 	}
-	return nil
-}
-func (s *server) adminUsers(w http.ResponseWriter, r *http.Request) error {
-	if e := requireAdmin(r); e != nil {
-		return e
-	}
-	rows, e := s.Store.DB.QueryContext(r.Context(), "SELECT id,username,display_name,role,disabled,version FROM users ORDER BY username")
-	if e != nil {
-		return e
-	}
-	defer rows.Close()
-	users := []auth.User{}
-	for rows.Next() {
-		var u auth.User
-		if e = rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.Disabled, &u.Version); e != nil {
-			return e
-		}
-		users = append(users, u)
-	}
-	if e = rows.Err(); e != nil {
-		return e
-	}
-	write(w, 200, map[string]any{"items": users})
-	return nil
-}
-func (s *server) adminInvite(w http.ResponseWriter, r *http.Request) error {
-	if e := requireAdmin(r); e != nil {
-		return e
-	}
-	var in struct{ Username, DisplayName, Role string }
-	if e := decode(w, r, &in); e != nil {
-		return e
-	}
-	u, token, e := s.auth.Invite(r.Context(), in.Username, in.DisplayName, in.Role)
-	if e != nil {
-		return fault.Validation(e.Error())
-	}
-	if e = s.audit(r, "user.invited"); e != nil {
-		return e
-	}
-	write(w, 201, map[string]any{"user": u, "invitationToken": token})
-	return nil
-}
-func (s *server) adminUpdate(w http.ResponseWriter, r *http.Request) error {
-	if e := requireAdmin(r); e != nil {
-		return e
-	}
-	var in struct {
-		Version     int     `json:"version"`
-		Disabled    *bool   `json:"disabled,omitempty"`
-		Role        *string `json:"role,omitempty"`
-		DisplayName *string `json:"displayName,omitempty"`
-	}
-	if e := decode(w, r, &in); e != nil {
-		return e
-	}
-	tx, e := s.Store.DB.BeginTx(r.Context(), nil)
-	if e != nil {
-		return e
-	}
-	defer tx.Rollback()
-	var u auth.User
-	if e = tx.QueryRowContext(r.Context(), "SELECT id,username,display_name,role,disabled,version FROM users WHERE id=?", r.PathValue("id")).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.Disabled, &u.Version); e == sql.ErrNoRows {
-		return fault.NotFound()
-	}
-	if e != nil {
-		return e
-	}
-	if in.Version != 0 && in.Version != u.Version {
-		return fault.Conflict()
-	}
-	oldAdmin := u.Role == "admin" && !u.Disabled
-	if in.Disabled != nil {
-		u.Disabled = *in.Disabled
-	}
-	if in.Role != nil {
-		if *in.Role != "admin" && *in.Role != "user" {
-			return fault.Validation("Ungültige Rolle")
-		}
-		u.Role = *in.Role
-	}
-	if in.DisplayName != nil {
-		u.DisplayName = strings.TrimSpace(*in.DisplayName)
-		if u.DisplayName == "" || utf8.RuneCountInString(u.DisplayName) > 100 {
-			return fault.Validation("Ungültiger Anzeigename")
-		}
-	}
-	if oldAdmin && (u.Disabled || u.Role != "admin") {
-		var n int
-		if e = tx.QueryRowContext(r.Context(), "SELECT count(*) FROM users WHERE role='admin' AND disabled=0").Scan(&n); e != nil {
-			return e
-		}
-		if n <= 1 {
-			return fault.New(409, "last_admin", "Letzter aktiver Administrator muss erhalten bleiben")
-		}
-	}
-	u.Version++
-	if _, e = tx.ExecContext(r.Context(), "UPDATE users SET display_name=?,role=?,disabled=?,version=? WHERE id=?", u.DisplayName, u.Role, u.Disabled, u.Version, u.ID); e != nil {
-		return e
-	}
-	if u.Disabled {
-		if _, e = tx.ExecContext(r.Context(), "DELETE FROM sessions WHERE user_id=?", u.ID); e != nil {
-			return e
-		}
-	}
-	if e = tx.Commit(); e != nil {
-		return e
-	}
-	s.audit(r, "user.updated")
-	write(w, 200, u)
 	return nil
 }
 func (s *server) audit(r *http.Request, action string) error {

@@ -44,10 +44,7 @@ func TestImportPreviewChecksDestinationAndCommitRechecksChangedRules(t *testing.
 	if e := backup.Export(context.Background(), s, me["collectionId"].(string), &archive, "test"); e != nil {
 		t.Fatal(e)
 	}
-	inv := source.do("POST", "/api/v1/admin/users", map[string]any{"username": "target-user", "displayName": "Target", "role": "user"}, 201)
-	target := &client{h: source.h, t: t}
-	tm := target.do("POST", "/api/v1/auth/invite", map[string]any{"token": inv["invitationToken"], "password": "Target-long-test-password"}, 200)
-	cid := tm["collectionId"].(string)
+	target, cid := secondAccount(t, source, s, "target-user")
 	preview := uploadReviewArchive(t, target, archive.Bytes(), 200)
 	target.do("POST", "/api/v1/fields", map[string]any{"label": "All records required", "type": "boolean", "required": true, "visibility": map[string]bool{"form": true}, "backfillValue": false}, 201)
 	out := target.do("POST", "/api/v1/imports", map[string]any{"token": preview["token"], "confirm": true}, 422)
@@ -58,7 +55,7 @@ func TestImportPreviewChecksDestinationAndCommitRechecksChangedRules(t *testing.
 	var fields, liquids, version int
 	s.DB.QueryRow("SELECT count(*) FROM field_definitions WHERE collection_id=?", cid).Scan(&fields)
 	s.DB.QueryRow("SELECT count(*) FROM liquids WHERE collection_id=?", cid).Scan(&liquids)
-	s.DB.QueryRow("SELECT version FROM user_preferences WHERE user_id=?", tm["user"].(map[string]any)["id"]).Scan(&version)
+	s.DB.QueryRow("SELECT version FROM user_preferences WHERE user_id=?", target.do("GET", "/api/v1/me", nil, 200)["user"].(map[string]any)["id"]).Scan(&version)
 	if fields != 1 || liquids != 0 || version != 1 {
 		t.Fatal("rejected import mutated destination", fields, liquids, version)
 	}

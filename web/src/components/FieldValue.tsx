@@ -1,6 +1,7 @@
 import type { Field, Scalar, Tag } from '../app/types';
-import { formatDate, formatDecimal } from '../features/fields/values';
+import { formatDate, formatNumber } from '../features/fields/values';
 import { paletteColor } from './PalettePicker';
+import { Stars } from './ui';
 export function FieldValue({
   field,
   value,
@@ -15,7 +16,7 @@ export function FieldValue({
     case 'number':
       return (
         <span className="tabular">
-          {formatDecimal(String(value))}
+          {formatNumber(String(value))}
           {field.config.unit ? ' ' + field.config.unit : ''}
         </span>
       );
@@ -24,16 +25,16 @@ export function FieldValue({
     case 'boolean':
       return <>{value ? 'Ja' : 'Nein'}</>;
     case 'rating':
-      return (
-        <span aria-label={`${value} von ${field.config.stars || 5}`}>
-          {'★'.repeat(Number(value))}
-          <span className="muted">
-            {'☆'.repeat(Math.max(0, (field.config.stars || 5) - Number(value)))}
-          </span>
-        </span>
-      );
+      return <Stars value={Number(value)} max={field.config.stars || 5} />;
     case 'image':
-      return <img className="item-image" src={'/api/v1/media/' + value} alt={field.label} />;
+      return (
+        <img
+          className="item-image"
+          loading="lazy"
+          src={'/api/v1/media/' + value + '?variant=thumbnail'}
+          alt={field.label}
+        />
+      );
     case 'color':
       return (
         <span className="color-value">

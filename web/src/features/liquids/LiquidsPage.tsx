@@ -1,16 +1,20 @@
-import { useDraftGuard } from '../../components/useDraftGuard';
 import { useState, useEffect } from 'react';
 import { api, download } from '../../app/api';
-import { useApp, useLoad, useAction } from '../../app/state';
+import { useApp, useLoad, useAction, useCanEdit } from '../../app/state';
 import type { Liquid, Page, SavedView, Filter, Field } from '../../app/types';
 import { readView, writeView, type ViewState } from './viewState';
 import { useTags, normalizeFilter } from './data';
 import { LiquidEditor } from './LiquidEditor';
 import { LiquidDetail } from './LiquidDetail';
+import { LiquidCard, type CardFields } from './LiquidCard';
+import { LiquidTable } from './LiquidTable';
+import { ViewDialog } from './ViewDialog';
 import { FilterBuilder } from './FilterBuilder';
 import { FilterChips } from './FilterChips';
-import { FieldValue } from '../../components/FieldValue';
+import { countConditions, quickTags, withQuickTags, withoutQuickTags } from './filters';
 import { TagsInput } from '../../components/FieldInput';
+import { paletteColor } from '../../components/PalettePicker';
+import { useToast } from '../../components/toast';
 import { saveBlob } from '../fields/values';
 import {
   Button,
@@ -20,47 +24,40 @@ import {
   Dialog,
   ErrorMessage,
   Empty,
-  ItemCard,
   Icon,
   Confirm,
 } from '../../components/ui';
-const fieldColumn = (field: Field) =>
-  'field-cell cell-' + field.type + (field.type === 'number' ? ' numeric' : '');
+/** Sorting by a name reads A to Z; sorting by anything measured leads with the highest. */
+const defaultDirection = (sort: string, fields: Field[]) =>
+  sort === 'name' ||
+  sort === 'shelf' ||
+  fields.find((f) => 'field:' + f.id === sort)?.type === 'text'
+    ? 'asc'
+    : 'desc';
 export function LiquidsPage({ query }: { query: string }) {
   const { fields, preferences, savePreferences, navigate } = useApp();
+  const toast = useToast();
+  const canEdit = useCanEdit();
   const q = readView(query);
   if (!new URLSearchParams(query).has('view')) q.view = preferences.view;
   const [search, setSearch] = useState(q.search);
-  const [editing, setEditing] = useState<{
-    liquid?: Liquid;
-    duplicate?: boolean;
-  }>();
+  const [editing, setEditing] = useState<{ liquid?: Liquid; duplicate?: boolean }>();
   const [detail, setDetail] = useState<Liquid>();
   const [filters, setFilters] = useState<Filter>();
   const [filterOpen, setFilterOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
-  const [viewDraft, setViewDraft] = useState(preferences);
-  const viewState = (p: typeof preferences) =>
-    JSON.stringify({
-      images: p.images,
-      listFields: p.listFields,
-      gridFields: p.gridFields,
-    });
-  const [viewInitial, setViewInitial] = useState(() => viewState(preferences));
-  const viewGuard = useDraftGuard(viewOpen && viewState(viewDraft) !== viewInitial, () =>
-    setViewOpen(false),
-  );
   const [selected, setSelected] = useState<string[]>([]);
   const [bulk, setBulk] = useState<'trash' | 'tag'>();
   const [tagField, setTagField] = useState('');
   const [tagIDs, setTagIDs] = useState<string[]>([]);
-  const [saveView, setSaveView] = useState(false);
-  const [viewName, setViewName] = useState('');
   const a = useAction();
   const tags = useTags();
   const views = useLoad(
-    (s) => api<{ items: SavedView[] }>('/saved-views', 'GET', undefined, s),
-    [],
+    (s) =>
+      canEdit
+        ? api<{ items: SavedView[] }>('/saved-views', 'GET', undefined, s)
+        : Promise.resolve({ items: [] as SavedView[] }),
+    [canEdit],
   );
   const request = writeView(q);
   const list = useLoad(
@@ -82,45 +79,84 @@ export function LiquidsPage({ query }: { query: string }) {
     list.reload();
     setSelected([]);
   };
+  const replaceItem = (next: Liquid) => {
+    if (list.data)
+      list.setData({
+        ...list.data,
+        items: list.data.items.map((l) => (l.id === next.id ? next : l)),
+      });
+  };
   const favorite = (l: Liquid) =>
     void a.run(async () => {
-      await api('/liquids/' + l.id, 'PATCH', {
-        version: l.version,
-        favorite: !l.favorite,
-      });
-      reload();
+      replaceItem({ ...l, favorite: !l.favorite });
+      try {
+        replaceItem(
+          await api<Liquid>('/liquids/' + l.id, 'PATCH', {
+            version: l.version,
+            favorite: !l.favorite,
+          }),
+        );
+      } catch (e) {
+        replaceItem(l);
+        throw e;
+      }
+      if (q.favorite) list.reload();
     });
+  const trashed = (l: Liquid) =>
+    toast({
+      message: `„${l.name}“ im Papierkorb`,
+      action: {
+        label: 'Rückgängig',
+        run: () =>
+          void a.run(async () => {
+            await api('/liquids/' + l.id + '/restore', 'POST', { version: l.version });
+            reload();
+          }),
+      },
+    });
+  // Quick tag chips work on the first tag field; other tag fields use the filter dialog.
+  const primaryTags = fields.find((f) => f.type === 'tags' && !f.archived);
+  const activeTags = quickTags(q.filters, primaryTags?.id);
+  const otherFilters = withoutQuickTags(q.filters, primaryTags?.id);
+  const filterCount = countConditions(otherFilters);
+  const narrowed = !!(q.search || q.filters || q.favorite);
+  const reset = () => {
+    setSearch('');
+    update({ favorite: false, filters: undefined, search: '', page: 1 });
+  };
+  const chosen = q.view === 'grid' ? preferences.gridFields : preferences.listFields;
   const shown = fields.filter(
     (f) =>
       !f.archived &&
       f.visibility[q.view] &&
       (preferences.images || f.type !== 'image') &&
-      (q.view === 'grid' ? preferences.gridFields : preferences.listFields).includes(f.id),
+      chosen.includes(f.id),
   );
-  const imageField = shown.find((f) => f.id === preferences.roles.image && !f.archived);
-  const ratingField = shown.find((f) => f.id === preferences.roles.rating && !f.archived);
-  const quantityField = shown.find((f) => f.id === preferences.roles.quantity && !f.archived);
-  const colorField = shown.find((f) => f.id === preferences.roles.color && !f.archived);
-  const image = (l: Liquid) => {
-    const id = imageField && l.values[imageField.id]?.value;
-    const color = colorField && l.values[colorField.id]?.value;
-    return preferences.images && imageField ? (
-      <div className="item-image-wrap">
-        {id ? (
-          <img className="item-image" src={'/api/v1/media/' + id} alt="" />
-        ) : (
-          <div
-            className="item-placeholder"
-            style={typeof color === 'string' ? { backgroundColor: color } : undefined}
-          >
-            <Icon name="liquids" />
-          </div>
-        )}
-      </div>
-    ) : null;
+  const imageRole = fields.find((f) => f.id === preferences.roles.image && !f.archived);
+  const showImage = preferences.images && (!imageRole || shown.includes(imageRole));
+  const rating = shown.find((f) => f.id === preferences.roles.rating);
+  const subtitle = shown.find((f) => f.type === 'text');
+  const cardFields: CardFields = {
+    subtitle,
+    rating,
+    tagFields: shown.filter((f) => f.type === 'tags'),
+    rest: shown.filter(
+      (f) =>
+        f.type !== 'tags' &&
+        f !== rating &&
+        f !== subtitle &&
+        f !== imageRole &&
+        f.id !== preferences.roles.color,
+    ),
+    stripped: !showImage,
   };
-  const choose = (id: string, checked: boolean) =>
-    setSelected(checked ? [...selected, id] : selected.filter((x) => x !== id));
+  const shelfOn =
+    !!preferences.roles.purchase &&
+    (preferences.shelfLifeMonths > 0 || !!preferences.roles.shelfOverride);
+  const items = list.data?.items || [];
+  const sortOptions = fields.filter(
+    (f) => !f.archived && ['text', 'number', 'rating', 'date', 'boolean'].includes(f.type),
+  );
   return (
     <>
       <PageHeader
@@ -131,75 +167,79 @@ export function LiquidsPage({ query }: { query: string }) {
             : undefined
         }
       >
-        <Button variant="primary" onClick={() => setEditing({})}>
-          <Icon name="plus" />
-          Liquid hinzufügen
-        </Button>
+        {canEdit && (
+          <Button variant="primary" onClick={() => setEditing({})}>
+            <Icon name="plus" />
+            Liquid hinzufügen
+          </Button>
+        )}
       </PageHeader>
       <div className="toolbar">
         <div className="toolbar-start">
-          <input
-            type="search"
-            className="search-box"
-            aria-label="Liquids suchen"
-            placeholder="Liquids suchen"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            maxLength={1000}
-          />
-          <Button
-            onClick={() => {
-              setViewDraft(preferences);
-              setViewInitial(viewState(preferences));
-              setViewOpen(true);
-            }}
-          >
+          <label className="search-box">
+            <Icon name="search" />
+            <input
+              type="search"
+              aria-label="Liquids suchen"
+              placeholder="Liquids suchen"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              maxLength={1000}
+            />
+          </label>
+          <Button onClick={() => setViewOpen(true)}>
+            <Icon name="sliders" />
             Ansicht
           </Button>
           <Button
             onClick={() => {
-              setFilters(q.filters);
+              setFilters(otherFilters);
               setFilterOpen(true);
             }}
           >
-            Filter{q.filters ? ' aktiv' : ''}
+            <Icon name="filter" />
+            Filter{filterCount ? ` (${filterCount})` : ''}
           </Button>
         </div>
         <div className="toolbar-end">
           <select
             aria-label="Sortieren nach"
             value={q.sort}
-            onChange={(e) => update({ sort: e.target.value, page: 1 })}
+            onChange={(e) =>
+              update({
+                sort: e.target.value,
+                direction: defaultDirection(e.target.value, fields),
+                page: 1,
+              })
+            }
           >
-            <option value="createdAt">Erstellt</option>
-            <option value="updatedAt">Geändert</option>
+            <option value="createdAt">Zuletzt hinzugefügt</option>
+            <option value="updatedAt">Zuletzt geändert</option>
             <option value="name">Name</option>
             <option value="favorite">Favorit</option>
-            {fields
-              .filter(
-                (f) =>
-                  !f.archived && ['text', 'number', 'rating', 'date', 'boolean'].includes(f.type),
-              )
-              .map((f) => (
-                <option key={f.id} value={'field:' + f.id}>
-                  {f.label}
-                </option>
-              ))}
+            {shelfOn && <option value="shelf">Haltbarkeit</option>}
+            {sortOptions.map((f) => (
+              <option key={f.id} value={'field:' + f.id}>
+                {f.label}
+              </option>
+            ))}
+            {q.sort.startsWith('field:') &&
+              !sortOptions.some((f) => 'field:' + f.id === q.sort) && (
+                <option value={q.sort}>Feld nicht verfügbar</option>
+              )}
           </select>
-          <select
-            aria-label="Sortierrichtung"
-            value={q.direction}
-            onChange={(e) => update({ direction: e.target.value })}
-          >
-            <option value="desc">Absteigend</option>
-            <option value="asc">Aufsteigend</option>
-          </select>
+          <IconButton
+            className="bordered"
+            label={q.direction === 'asc' ? 'Aufsteigend sortiert' : 'Absteigend sortiert'}
+            icon={q.direction === 'asc' ? 'sortAsc' : 'sortDesc'}
+            onClick={() => update({ direction: q.direction === 'asc' ? 'desc' : 'asc' })}
+          />
           <SegmentedControl
             label="Darstellung"
             value={q.view}
             options={[
-              { value: 'grid', label: 'Kacheln' },
-              { value: 'list', label: 'Liste' },
+              { value: 'grid', label: 'Kacheln', icon: 'grid' },
+              { value: 'list', label: 'Liste', icon: 'list' },
             ]}
             onChange={(v) => {
               update({ view: v });
@@ -208,85 +248,67 @@ export function LiquidsPage({ query }: { query: string }) {
           />
         </div>
       </div>
-      {q.sort.startsWith('field:') && (
-        <p className="sort-summary">
-          Sortiert nach:{' '}
-          {fields.find((f) => q.sort === 'field:' + f.id)?.label || 'Feld nicht verfügbar'} ·{' '}
-          {q.direction === 'asc' ? 'Aufsteigend' : 'Absteigend'}
-        </p>
-      )}
-      <div className="filter-bar">
+      <div className="filter-chips">
         <Button
+          className="filter-chip"
           aria-pressed={q.favorite}
           onClick={() => update({ favorite: !q.favorite, page: 1 })}
         >
-          <Icon name="star" />
+          <Icon name="heart" />
           Nur Favoriten
         </Button>
-        {q.filters && (
-          <Button onClick={() => update({ filters: undefined, page: 1 })}>
-            Feldfilter entfernen
-          </Button>
-        )}
-        {(q.favorite || q.filters || q.search) && (
-          <Button
-            onClick={() => {
-              setSearch('');
-              update({
-                favorite: false,
-                filters: undefined,
-                search: '',
-                page: 1,
-              });
-            }}
-          >
-            Filter zurücksetzen
-          </Button>
-        )}
-        <select
-          aria-label="Gespeicherte Ansicht"
-          value=""
-          onChange={(e) => {
-            const v = views.data?.items.find((v) => v.id === e.target.value);
-            if (v)
-              update({
-                search: v.search,
-                favorite: v.favorite,
-                sort: v.sort,
-                direction: v.direction,
-                filters: v.filters,
-                page: 1,
-              });
-          }}
-        >
-          <option value="">Gespeicherte Ansichten</option>
-          {views.data?.items.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
+        {(tags.data || [])
+          .filter((t) => t.fieldId === primaryTags?.id)
+          .map((t) => (
+            <Button
+              key={t.id}
+              className="filter-chip"
+              aria-pressed={activeTags.includes(t.id)}
+              onClick={() =>
+                update({
+                  filters: withQuickTags(
+                    q.filters,
+                    primaryTags?.id,
+                    activeTags.includes(t.id)
+                      ? activeTags.filter((id) => id !== t.id)
+                      : [...activeTags, t.id],
+                  ),
+                  page: 1,
+                })
+              }
+            >
+              <span
+                className="chip-dot"
+                style={{ '--chip-color': paletteColor(t.paletteId) } as React.CSSProperties}
+              />
+              {t.name}
+            </Button>
           ))}
-        </select>
-        <Button onClick={() => setSaveView(true)}>Ansicht speichern</Button>
+        {otherFilters && (
+          <FilterChips
+            value={otherFilters}
+            fields={fields}
+            tags={tags.data || []}
+            onChange={(next) =>
+              update({ filters: withQuickTags(next, primaryTags?.id, activeTags), page: 1 })
+            }
+          />
+        )}
+        {narrowed && (
+          <button type="button" className="text-action" onClick={reset}>
+            Filter zurücksetzen
+          </button>
+        )}
       </div>
-      {q.filters && (
-        <FilterChips
-          value={q.filters}
-          fields={fields}
-          tags={tags.data || []}
-          onChange={(filters) => update({ filters, page: 1 })}
-        />
-      )}
       <ErrorMessage error={a.error || list.error || tags.error || views.error} />
       {list.error && <Button onClick={list.reload}>Erneut versuchen</Button>}
-      {list.loading && <p role="status">Laden…</p>}
       {selected.length > 0 && (
         <div className="selection-bar">
           <strong>{selected.length} ausgewählt</strong>
-          <Button onClick={() => setBulk('trash')}>In Papierkorb</Button>
           <Button
-            disabled={!fields.some((f) => f.type === 'tags' && !f.archived)}
+            disabled={!primaryTags}
             onClick={() => {
-              setTagField(fields.find((f) => f.type === 'tags' && !f.archived)?.id || '');
+              setTagField(primaryTags?.id || '');
               setBulk('tag');
             }}
           >
@@ -301,209 +323,101 @@ export function LiquidsPage({ query }: { query: string }) {
           >
             Auswahl exportieren
           </Button>
-          <Button
-            onClick={() =>
-              void a.run(async () =>
-                saveBlob(await download('/exports', {}), 'puffolio-sammlung.zip'),
-              )
-            }
-          >
-            Gesamte Sammlung exportieren
+          <Button variant="danger" onClick={() => setBulk('trash')}>
+            In Papierkorb
           </Button>
           <Button onClick={() => setSelected([])}>Auswahl aufheben</Button>
         </div>
       )}
-      {list.data && !list.loading && list.data.items.length === 0 ? (
-        <Empty
-          action={
-            q.search || q.filters || q.favorite ? (
-              <Button
-                onClick={() =>
-                  update({
-                    search: '',
-                    favorite: false,
-                    filters: undefined,
-                    page: 1,
-                  })
-                }
-              >
-                Filter zurücksetzen
-              </Button>
-            ) : (
-              <Button variant="primary" onClick={() => setEditing({})}>
-                Liquid hinzufügen
-              </Button>
-            )
-          }
-        >
-          {q.search || q.filters || q.favorite ? 'Keine Liquids gefunden.' : 'Noch keine Liquids.'}
-        </Empty>
-      ) : q.view === 'grid' ? (
-        <div className="liquid-grid">
-          {list.data?.items.map((l) => (
-            <ItemCard
-              key={l.id}
-              image={image(l)}
-              title={
-                <button className="name-button" onClick={() => setDetail(l)}>
-                  {l.name}
-                </button>
-              }
-              actions={
-                <>
-                  <label className="check-row">
-                    <input
-                      type="checkbox"
-                      aria-label={`${l.name} auswählen`}
-                      checked={selected.includes(l.id)}
-                      onChange={(e) => choose(l.id, e.target.checked)}
-                    />
-                    Auswählen
-                  </label>
-                  <Button onClick={() => setEditing({ liquid: l })}>
-                    <Icon name="edit" />
-                    Bearbeiten
-                  </Button>
-                </>
-              }
-            >
-              <div className="card-rating-row">
-                {quantityField && (
-                  <FieldValue field={quantityField} value={l.values[quantityField.id]?.value} />
-                )}
-                {ratingField && (
-                  <FieldValue field={ratingField} value={l.values[ratingField.id]?.value} />
-                )}
-                <IconButton
-                  label={`${l.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}: ${l.name}`}
-                  icon="star"
-                  aria-pressed={l.favorite}
-                  onClick={() => favorite(l)}
-                />
-              </div>
-              <dl className="card-fields">
-                {shown
-                  .filter(
-                    (f) =>
-                      f.id !== ratingField?.id &&
-                      f.id !== quantityField?.id &&
-                      f.id !== imageField?.id,
-                  )
-                  .map((f) => (
-                    <div key={f.id}>
-                      <dt>{f.label}</dt>
-                      <dd>
-                        <FieldValue field={f} value={l.values[f.id]?.value} tags={tags.data} />
-                      </dd>
-                    </div>
-                  ))}
-              </dl>
-            </ItemCard>
-          ))}
-        </div>
-      ) : (
-        <div className="table-scroll" tabIndex={0} aria-label="Liquidtabelle">
-          <table>
-            <thead>
-              <tr>
-                <th className="checkbox-column">
-                  <label className="check-row checkbox-target">
-                    <input
-                      type="checkbox"
-                      aria-label="Alle auf dieser Seite auswählen"
-                      checked={
-                        !!list.data?.items.length && selected.length === list.data.items.length
-                      }
-                      onChange={(e) =>
-                        setSelected(e.target.checked ? list.data?.items.map((l) => l.id) || [] : [])
-                      }
-                    />
-                  </label>
-                </th>
-                <th className="name-column">Name</th>
-                {imageField && <th>Bild</th>}
-                {shown
-                  .filter((f) => f.id !== imageField?.id)
-                  .map((f) => (
-                    <th key={f.id} className={fieldColumn(f)}>
-                      {f.label}
-                    </th>
-                  ))}
-                <th className="actions-column">Aktionen</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data?.items.map((l) => (
-                <tr key={l.id}>
-                  <td className="checkbox-column">
-                    <label className="check-row checkbox-target">
-                      <input
-                        type="checkbox"
-                        aria-label={`${l.name} auswählen`}
-                        checked={selected.includes(l.id)}
-                        onChange={(e) => choose(l.id, e.target.checked)}
-                      />
-                    </label>
-                  </td>
-                  <th className="name-column" scope="row">
-                    <button className="name-button" onClick={() => setDetail(l)}>
-                      {l.name}
-                    </button>
-                  </th>
-                  {imageField && <td className="table-image">{image(l)}</td>}
-                  {shown
-                    .filter((f) => f.id !== imageField?.id)
-                    .map((f) => (
-                      <td key={f.id} className={fieldColumn(f)}>
-                        <FieldValue field={f} value={l.values[f.id]?.value} tags={tags.data} />
-                      </td>
-                    ))}
-                  <td className="actions-column">
-                    <div className="actions table-actions">
-                      <IconButton
-                        label={`${l.favorite ? 'Favorit entfernen' : 'Als Favorit markieren'}: ${l.name}`}
-                        icon="star"
-                        aria-pressed={l.favorite}
-                        onClick={() => favorite(l)}
-                      />
-                      <IconButton
-                        label={`${l.name} bearbeiten`}
-                        icon="edit"
-                        onClick={() => setEditing({ liquid: l })}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className={'collection-body ' + (list.loading && list.data ? 'refreshing' : '')}>
+        {!list.data && list.loading ? (
+          <div className="liquid-grid" role="status" aria-label="Laden…">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div className="skeleton-card" key={i} />
+            ))}
+          </div>
+        ) : list.data && items.length === 0 ? (
+          <Empty
+            action={
+              narrowed ? (
+                <Button onClick={reset}>Filter zurücksetzen</Button>
+              ) : canEdit ? (
+                <Button variant="primary" onClick={() => setEditing({})}>
+                  Liquid hinzufügen
+                </Button>
+              ) : undefined
+            }
+          >
+            {narrowed ? 'Keine Liquids gefunden.' : 'Noch keine Liquids.'}
+          </Empty>
+        ) : q.view === 'grid' ? (
+          <div className="liquid-grid">
+            {items.map((l) => (
+              <LiquidCard
+                key={l.id}
+                liquid={l}
+                fields={cardFields}
+                tags={tags.data}
+                onOpen={() => setDetail(l)}
+                onEdit={canEdit ? () => setEditing({ liquid: l }) : undefined}
+                onFavorite={canEdit ? () => favorite(l) : undefined}
+              />
+            ))}
+          </div>
+        ) : (
+          <LiquidTable
+            items={items}
+            columns={shown.filter((f) => f !== imageRole)}
+            showImage={showImage}
+            showShelf={shelfOn}
+            tags={tags.data}
+            sort={q.sort}
+            direction={q.direction}
+            selected={selected}
+            onSelect={(id, checked) =>
+              setSelected(checked ? [...selected, id] : selected.filter((x) => x !== id))
+            }
+            onSelectAll={(checked) => setSelected(checked ? items.map((l) => l.id) : [])}
+            onSort={(key) =>
+              update(
+                q.sort === key
+                  ? { direction: q.direction === 'asc' ? 'desc' : 'asc', page: 1 }
+                  : { sort: key, direction: defaultDirection(key, fields), page: 1 },
+              )
+            }
+            onOpen={setDetail}
+            onEdit={canEdit ? (l) => setEditing({ liquid: l }) : undefined}
+            onFavorite={canEdit ? favorite : undefined}
+          />
+        )}
+      </div>
+      {list.data && list.data.total > 24 && (
+        <div className="pagination">
+          <Button disabled={q.page <= 1} onClick={() => update({ page: q.page - 1 })}>
+            Zurück
+          </Button>
+          <span>
+            Seite {q.page} von {Math.max(1, Math.ceil(list.data.total / q.pageSize))}
+          </span>
+          <Button
+            disabled={q.page * q.pageSize >= list.data.total}
+            onClick={() => update({ page: q.page + 1 })}
+          >
+            Weiter
+          </Button>
+          <select
+            aria-label="Liquids pro Seite"
+            value={q.pageSize}
+            onChange={(e) => update({ pageSize: Number(e.target.value), page: 1 })}
+          >
+            {[24, 48, 96].map((n) => (
+              <option key={n} value={n}>
+                {n} pro Seite
+              </option>
+            ))}
+          </select>
         </div>
       )}
-      <div className="pagination">
-        <Button disabled={q.page <= 1} onClick={() => update({ page: q.page - 1 })}>
-          Zurück
-        </Button>
-        <span>
-          Seite {q.page} von {Math.max(1, Math.ceil((list.data?.total || 0) / q.pageSize))}
-        </span>
-        <Button
-          disabled={!list.data || q.page * q.pageSize >= list.data.total}
-          onClick={() => update({ page: q.page + 1 })}
-        >
-          Weiter
-        </Button>
-        <select
-          aria-label="Liquids pro Seite"
-          value={q.pageSize}
-          onChange={(e) => update({ pageSize: Number(e.target.value), page: 1 })}
-        >
-          {[24, 48, 96].map((n) => (
-            <option key={n} value={n}>
-              {n} pro Seite
-            </option>
-          ))}
-        </select>
-      </div>
       {editing && (
         <LiquidEditor
           {...editing}
@@ -514,6 +428,7 @@ export function LiquidsPage({ query }: { query: string }) {
           onSaved={() => {
             setEditing(undefined);
             reload();
+            toast('Gespeichert');
           }}
         />
       )}
@@ -530,7 +445,8 @@ export function LiquidsPage({ query }: { query: string }) {
             setEditing({ liquid: detail, duplicate: true });
             setDetail(undefined);
           }}
-          onChange={reload}
+          onChange={(next) => (next ? replaceItem(next) : reload())}
+          onTrashed={trashed}
         />
       )}
       {filterOpen && (
@@ -545,7 +461,11 @@ export function LiquidsPage({ query }: { query: string }) {
                 onClick={() =>
                   void a.run(async () => {
                     update({
-                      filters: normalizeFilter(filters, fields),
+                      filters: withQuickTags(
+                        normalizeFilter(filters, fields),
+                        primaryTags?.id,
+                        activeTags,
+                      ),
                       page: 1,
                     });
                     setFilterOpen(false);
@@ -562,130 +482,22 @@ export function LiquidsPage({ query }: { query: string }) {
         </Dialog>
       )}
       {viewOpen && (
-        <Dialog
-          title="Ansicht"
-          onClose={viewGuard.close}
-          footer={
-            <>
-              <Button onClick={viewGuard.close}>Abbrechen</Button>
-              <Button
-                variant="primary"
-                disabled={a.busy}
-                onClick={() =>
-                  void a.run(async () => {
-                    await savePreferences({
-                      images: viewDraft.images,
-                      listFields: viewDraft.listFields,
-                      gridFields: viewDraft.gridFields,
-                    });
-                    setViewOpen(false);
-                  })
-                }
-              >
-                Speichern
-              </Button>
-            </>
+        <ViewDialog
+          query={q}
+          views={views.data?.items || []}
+          onViewsChanged={views.reload}
+          onApply={(v) =>
+            update({
+              search: v.search,
+              favorite: v.favorite,
+              sort: v.sort,
+              direction: v.direction,
+              filters: v.filters,
+              page: 1,
+            })
           }
-        >
-          {viewGuard.confirmation}
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={viewDraft.images}
-              onChange={(e) => setViewDraft({ ...viewDraft, images: e.target.checked })}
-            />
-            Bilder anzeigen
-          </label>
-          {(['list', 'grid'] as const).map((view) => (
-            <fieldset key={view}>
-              <legend>{view === 'list' ? 'Listenspalten' : 'Kachelfelder'}</legend>
-              {fields
-                .filter((f) => !f.archived && f.visibility[view])
-                .map((f) => {
-                  const key = view === 'list' ? 'listFields' : 'gridFields';
-                  return (
-                    <label className="check-row" key={f.id}>
-                      <input
-                        type="checkbox"
-                        checked={viewDraft[key].includes(f.id)}
-                        onChange={(e) =>
-                          setViewDraft({
-                            ...viewDraft,
-                            [key]: e.target.checked
-                              ? [...viewDraft[key], f.id]
-                              : viewDraft[key].filter((id) => id !== f.id),
-                          })
-                        }
-                      />
-                      {f.label}
-                    </label>
-                  );
-                })}
-            </fieldset>
-          ))}
-          <ErrorMessage error={a.error} />
-        </Dialog>
-      )}
-      {saveView && (
-        <Dialog
-          title="Gespeicherte Ansichten"
-          onClose={() => setSaveView(false)}
-          footer={
-            <>
-              <Button onClick={() => setSaveView(false)}>Schließen</Button>
-              <Button
-                variant="primary"
-                disabled={a.busy || !viewName.trim()}
-                onClick={() =>
-                  void a.run(async () => {
-                    await api('/saved-views', 'POST', {
-                      name: viewName,
-                      search: q.search,
-                      favorite: q.favorite,
-                      filters: q.filters,
-                      sort: q.sort,
-                      direction: q.direction,
-                    });
-                    views.reload();
-                    setViewName('');
-                    setSaveView(false);
-                  })
-                }
-              >
-                Speichern
-              </Button>
-            </>
-          }
-        >
-          <label>
-            Name
-            <input
-              aria-label="Ansichtsname"
-              value={viewName}
-              onChange={(e) => setViewName(e.target.value)}
-              maxLength={100}
-            />
-          </label>
-          {views.data?.items.map((v) => (
-            <div className="setting-line" key={v.id}>
-              <span>{v.name}</span>
-              <Button
-                variant="danger"
-                onClick={() =>
-                  void a.run(async () => {
-                    await api('/saved-views/' + v.id, 'DELETE', {
-                      version: v.version,
-                    });
-                    views.reload();
-                  })
-                }
-              >
-                Löschen
-              </Button>
-            </div>
-          ))}
-          <ErrorMessage error={a.error} />
-        </Dialog>
+          onClose={() => setViewOpen(false)}
+        />
       )}
       {bulk === 'trash' && (
         <Confirm
@@ -694,11 +506,9 @@ export function LiquidsPage({ query }: { query: string }) {
           onCancel={() => setBulk(undefined)}
           onConfirm={() =>
             void a.run(async () => {
-              await api('/liquids/bulk', 'POST', {
-                ids: selected,
-                action: 'trash',
-              });
+              await api('/liquids/bulk', 'POST', { ids: selected, action: 'trash' });
               setBulk(undefined);
+              toast(`${selected.length} im Papierkorb`);
               reload();
             })
           }
@@ -727,6 +537,7 @@ export function LiquidsPage({ query }: { query: string }) {
                     });
                     setBulk(undefined);
                     setTagIDs([]);
+                    toast('Tags zugewiesen');
                     reload();
                   })
                 }
@@ -736,22 +547,24 @@ export function LiquidsPage({ query }: { query: string }) {
             </>
           }
         >
-          <select
-            aria-label="Tagfeld"
-            value={tagField}
-            onChange={(e) => {
-              setTagField(e.target.value);
-              setTagIDs([]);
-            }}
-          >
-            {fields
-              .filter((f) => f.type === 'tags' && !f.archived)
-              .map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-          </select>
+          {fields.filter((f) => f.type === 'tags' && !f.archived).length > 1 && (
+            <select
+              aria-label="Tagfeld"
+              value={tagField}
+              onChange={(e) => {
+                setTagField(e.target.value);
+                setTagIDs([]);
+              }}
+            >
+              {fields
+                .filter((f) => f.type === 'tags' && !f.archived)
+                .map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+            </select>
+          )}
           {fields.find((f) => f.id === tagField) && (
             <TagsInput
               field={fields.find((f) => f.id === tagField)!}

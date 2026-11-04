@@ -49,7 +49,7 @@ test('canceling an in-flight crop never applies its later revision to the parent
     }
   });
   await goto(app, '/liquids');
-  await app.page.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
+  await app.page.getByRole('button', { name: /bearbeiten$/ }).click();
   await app.page.getByRole('button', { name: 'Ausschnitt ändern', exact: true }).click();
   const crop = app.page.getByRole('dialog', { name: 'Bildausschnitt', exact: true });
   await crop.getByLabel('Zoom', { exact: true }).fill('2');
@@ -69,7 +69,7 @@ test('selected card images and primary roles obey view choices and images-off', 
   const defs = await fields(app),
     image = defs.find((f) => f.type === 'image'),
     rating = defs.find((f) => f.type === 'rating'),
-    quantity = defs.find((f) => f.label === 'Menge');
+    quantity = defs.find((f) => f.label === 'Nikotin');
   await app.write('/fields/' + quantity.id, 'PATCH', {
     ...quantity,
     visibility: { ...quantity.visibility, grid: true },
@@ -93,7 +93,7 @@ test('selected card images and primary roles obey view choices and images-off', 
   });
   await goto(app, '/liquids');
   await expect(app.page.locator('main img[src^="/api/v1/media/"]')).toHaveCount(2);
-  await expect(app.page.getByText('12,0 ml', { exact: true })).toBeVisible();
+  await expect(app.page.getByText('12 mg/ml', { exact: true })).toBeVisible();
   await expect(app.page.getByLabel('4 von 5', { exact: true })).toBeVisible();
   await app.page.getByRole('button', { name: 'Ansicht', exact: true }).click();
   const view = app.page.getByRole('dialog', { name: 'Ansicht', exact: true });
@@ -103,7 +103,7 @@ test('selected card images and primary roles obey view choices and images-off', 
   await view.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(app.page.getByRole('img', { name: 'Zusatzbild', exact: true })).toBeVisible();
   await expect(app.page.locator('main img[src^="/api/v1/media/"]')).toHaveCount(1);
-  await expect(app.page.getByText('12,0 ml', { exact: true })).not.toBeVisible();
+  await expect(app.page.getByText('12 mg/ml', { exact: true })).not.toBeVisible();
   await expect(app.page.getByLabel('4 von 5', { exact: true })).not.toBeVisible();
   await app.page.getByRole('button', { name: 'Ansicht', exact: true }).click();
   await view.getByLabel('Bilder anzeigen', { exact: true }).uncheck();
@@ -164,7 +164,10 @@ test('dirty widget and existing default close only after explicit discard confir
   const field = await addField(app, 'Standardtest', 'text', { defaultValue: 'Vorlage' });
   await goto(app, '/dashboard');
   await app.page.getByRole('button', { name: 'Dashboard anpassen', exact: true }).click();
-  await app.page.getByRole('button', { name: 'Bearbeiten', exact: true }).first().click();
+  await app.page
+    .getByRole('button', { name: /bearbeiten$/ })
+    .first()
+    .click();
   const widget = app.page.getByRole('dialog', { name: 'Widget bearbeiten', exact: true });
   await widget.getByLabel('Widgettitel', { exact: true }).fill('Ungespeichert');
   await app.page.keyboard.press('Escape');
@@ -178,11 +181,7 @@ test('dirty widget and existing default close only after explicit discard confir
   await app.page.getByRole('button', { name: 'Abbrechen', exact: true }).click();
   await app.page.getByRole('button', { name: 'Bestätigen', exact: true }).click();
   await goto(app, '/settings');
-  await app.page
-    .locator('.setting-line')
-    .filter({ hasText: 'Standardtest' })
-    .getByRole('button', { name: 'Bearbeiten', exact: true })
-    .click();
+  await app.page.getByRole('button', { name: 'Standardtest bearbeiten', exact: true }).click();
   const editor = app.page.getByRole('dialog', { name: 'Feld bearbeiten', exact: true });
   await editor.getByLabel('Standardwert für neue Liquids', { exact: true }).uncheck();
   await app.page.keyboard.press('Escape');

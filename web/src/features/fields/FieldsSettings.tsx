@@ -11,7 +11,9 @@ import {
   ErrorMessage,
   Confirm,
   HelpPopover,
+  Icon,
 } from '../../components/ui';
+import { useToast } from '../../components/toast';
 import { canonicalNumber, saveBlob } from './values';
 import { download } from '../../app/api';
 export const fieldTypes: Record<FieldType, string> = {
@@ -392,6 +394,149 @@ function FieldDialog({
     </>
   );
 }
+const typeIcons: Record<FieldType, string> = {
+  text: 'list',
+  longtext: 'list',
+  rating: 'star',
+  image: 'image',
+  tags: 'tag',
+  color: 'liquids',
+  date: 'calendar',
+  number: 'box',
+  select: 'filter',
+  boolean: 'check',
+};
+const contexts = [
+  ['form', 'Formular'],
+  ['detail', 'Detail'],
+  ['list', 'Liste'],
+  ['grid', 'Kachel'],
+] as const;
+function ShelfLifeSetting() {
+  const { fields, preferences, savePreferences } = useApp();
+  const toast = useToast();
+  const stored = preferences.shelfLifeMonths || 0;
+  const yearly = stored % 12 === 0;
+  const [amount, setAmount] = useState(stored ? String(yearly ? stored / 12 : stored) : '');
+  const [unit, setUnit] = useState(yearly ? 'years' : 'months');
+  const a = useAction();
+  const months = Number(amount || 0) * (unit === 'years' ? 12 : 1);
+  const valid = Number.isInteger(months) && months >= 0 && months <= 1200;
+  const role = (key: 'purchase' | 'shelfOverride', id: string) =>
+    void a.run(() => savePreferences({ roles: { ...preferences.roles, [key]: id } }));
+  const statusOptions = fields
+    .filter((f) => !f.archived && f.type === 'select')
+    .flatMap((f) =>
+      (f.config.options || []).map((o) => ({
+        value: f.id + '|' + o.id,
+        label: `${f.label}: ${o.label}`,
+      })),
+    );
+  const consumed = preferences.consumedOption
+    ? preferences.roles.status + '|' + preferences.consumedOption
+    : '';
+  return (
+    <section className="section-card">
+      <h2>Haltbarkeit</h2>
+      <form
+        className="shelf-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void a.run(async () => {
+            await savePreferences({ shelfLifeMonths: months });
+            toast('Gespeichert');
+          });
+        }}
+      >
+        <label className="form-field">
+          Standardhaltedauer
+          <input
+            aria-label="Standardhaltedauer"
+            inputMode="numeric"
+            value={amount}
+            aria-invalid={!valid}
+            onChange={(e) => setAmount(e.target.value)}
+          />
+        </label>
+        <label className="form-field">
+          Einheit
+          <select
+            aria-label="Einheit der Haltedauer"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+          >
+            <option value="years">Jahre</option>
+            <option value="months">Monate</option>
+          </select>
+        </label>
+        <Button type="submit" variant="primary" disabled={a.busy || !valid || months === stored}>
+          Haltedauer speichern
+        </Button>
+      </form>
+      <div className="form-grid shelf-roles">
+        <label className="form-field">
+          Läuft ab
+          <select
+            aria-label="Datumsfeld der Haltedauer"
+            value={preferences.roles.purchase || ''}
+            onChange={(e) => role('purchase', e.target.value)}
+          >
+            <option value="">Nicht zugeordnet</option>
+            {fields
+              .filter((f) => !f.archived && f.type === 'date')
+              .map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="form-field">
+          Eigene Haltedauer je Liquid
+          <select
+            aria-label="Zahlenfeld für eigene Haltedauer"
+            value={preferences.roles.shelfOverride || ''}
+            onChange={(e) => role('shelfOverride', e.target.value)}
+          >
+            <option value="">Nicht zugeordnet</option>
+            {fields
+              .filter((f) => !f.archived && f.type === 'number')
+              .map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                  {f.config.unit ? ` (${f.config.unit})` : ''}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="form-field">
+          Gilt als aufgebraucht
+          <select
+            aria-label="Status für aufgebraucht"
+            value={consumed}
+            onChange={(e) => {
+              const [status, option] = e.target.value.split('|');
+              void a.run(() =>
+                savePreferences({
+                  roles: { ...preferences.roles, status: status || '' },
+                  consumedOption: option || '',
+                }),
+              );
+            }}
+          >
+            <option value="">Nicht zugeordnet</option>
+            {statusOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <ErrorMessage error={a.error} />
+    </section>
+  );
+}
 export function FieldsSettings() {
   const { fields, schemaVersion, preferences, savePreferences, refresh } = useApp();
   const [edit, setEdit] = useState<{ field?: Field }>();
@@ -414,64 +559,113 @@ export function FieldsSettings() {
       <div className="settings-section-heading">
         <h2>Felder</h2>
         <Button variant="primary" onClick={() => setEdit({})}>
+          <Icon name="plus" />
           Feld hinzufügen
         </Button>
       </div>
       <ErrorMessage error={a.error} />
-      <div className="field-list">
-        {fields.map((f, i) => (
-          <div className="setting-line" key={f.id}>
-            <div>
-              <strong>{f.label}</strong>
-              <span className="muted">
-                {fieldTypes[f.type]}
-                {f.archived ? ' · Archiviert' : ''}
-                {f.required ? ' · Pflichtfeld' : ''}
-              </span>
-            </div>
-            <div className="actions">
-              <IconButton
-                icon="arrow"
-                className="arrow-up"
-                label={`${f.label} nach oben`}
-                disabled={i === 0}
-                onClick={() => move(i, -1)}
-              />
-              <IconButton
-                icon="arrow"
-                className="arrow-down"
-                label={`${f.label} nach unten`}
-                disabled={i === fields.length - 1}
-                onClick={() => move(i, 1)}
-              />
-              <Button onClick={() => setEdit({ field: f })}>Bearbeiten</Button>
-              <Button
-                onClick={() =>
-                  void a.run(async () => {
-                    await api('/fields/' + f.id + '/archive', 'POST', {
-                      version: f.version,
-                      archived: !f.archived,
-                    });
-                    await refresh();
-                  })
-                }
-              >
-                {f.archived ? 'Aktivieren' : 'Archivieren'}
-              </Button>
-              <IconButton
-                label={`${f.label} löschen`}
-                icon="trash"
-                onClick={() =>
-                  void a.run(async () => {
-                    const usage = await api<{ values: number }>('/fields/' + f.id + '/usage');
-                    setDeletion({ field: f, values: usage.values });
-                  })
-                }
-              />
-            </div>
-          </div>
-        ))}
+      <div className="table-scroll" tabIndex={0} aria-label="Felder">
+        <table className="field-table">
+          <thead>
+            <tr>
+              <th>Feld</th>
+              {contexts.map(([key, label]) => (
+                <th className="check-col" key={key}>
+                  {label}
+                </th>
+              ))}
+              <th className="actions-column">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((f, i) => (
+              <tr key={f.id} className={f.archived ? 'archived' : ''}>
+                <th scope="row">
+                  <div className="field-name">
+                    <span className="field-type-icon">
+                      <Icon name={typeIcons[f.type]} />
+                    </span>
+                    <div>
+                      <strong>{f.label}</strong>
+                      <span className="muted">
+                        {fieldTypes[f.type]}
+                        {f.archived ? ' · Archiviert' : ''}
+                        {f.required ? ' · Pflichtfeld' : ''}
+                      </span>
+                    </div>
+                  </div>
+                </th>
+                {contexts.map(([key, label]) => (
+                  <td className="check-col" key={key}>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        aria-label={`${f.label}: ${label}`}
+                        checked={f.visibility[key]}
+                        disabled={a.busy || f.archived || (key === 'form' && f.required)}
+                        onChange={(e) =>
+                          void a.run(async () => {
+                            await api('/fields/' + f.id, 'PATCH', {
+                              version: f.version,
+                              visibility: { ...f.visibility, [key]: e.target.checked },
+                            });
+                            await refresh();
+                          })
+                        }
+                      />
+                    </label>
+                  </td>
+                ))}
+                <td className="actions-column">
+                  <div className="actions table-actions">
+                    <IconButton
+                      icon="up"
+                      label={`${f.label} nach oben`}
+                      disabled={i === 0}
+                      onClick={() => move(i, -1)}
+                    />
+                    <IconButton
+                      icon="down"
+                      label={`${f.label} nach unten`}
+                      disabled={i === fields.length - 1}
+                      onClick={() => move(i, 1)}
+                    />
+                    <IconButton
+                      icon="edit"
+                      label={`${f.label} bearbeiten`}
+                      onClick={() => setEdit({ field: f })}
+                    />
+                    <IconButton
+                      icon={f.archived ? 'restore' : 'archive'}
+                      label={`${f.label} ${f.archived ? 'aktivieren' : 'archivieren'}`}
+                      onClick={() =>
+                        void a.run(async () => {
+                          await api('/fields/' + f.id + '/archive', 'POST', {
+                            version: f.version,
+                            archived: !f.archived,
+                          });
+                          await refresh();
+                        })
+                      }
+                    />
+                    <IconButton
+                      label={`${f.label} löschen`}
+                      icon="trash"
+                      onClick={() =>
+                        void a.run(async () => {
+                          const usage = await api<{ values: number }>('/fields/' + f.id + '/usage');
+                          setDeletion({ field: f, values: usage.values });
+                        })
+                      }
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+      <ShelfLifeSetting key={preferences.shelfLifeMonths} />
       <section className="section-card">
         <h2>Feldzuordnungen</h2>
         <div className="form-grid">
@@ -479,7 +673,6 @@ export function FieldsSettings() {
             [
               ['image', 'Vorschaubild', 'image'],
               ['rating', 'Hauptbewertung', 'rating'],
-              ['quantity', 'Menge', 'number'],
               ['color', 'Kachelfarbe', 'color'],
             ] as const
           ).map(([role, label, type]) => (

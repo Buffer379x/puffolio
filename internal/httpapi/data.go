@@ -43,6 +43,8 @@ func (s *server) download(w http.ResponseWriter, r *http.Request, name string, c
 	if e = f.Sync(); e != nil {
 		return e
 	}
+	// The archive is complete on disk; the client's download speed must not block writers.
+	releaseWriter(r)
 	if _, e = f.Seek(0, 0); e != nil {
 		return e
 	}

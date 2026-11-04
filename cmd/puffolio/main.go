@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata"
@@ -86,8 +87,10 @@ func serve(c config.Config, args []string) error {
 		return e
 	}
 	defer s.Close()
-	if _, e = os.Stat(c.DataDir + "/setup-code"); e == nil {
-		slog.Info("first-run setup code is available in file", "path", c.DataDir+"/setup-code")
+	// The distroless image has no shell, so on Unraid and Docker the log is the
+	// one place an operator can read this. It is single-use and dies with setup.
+	if code, e := os.ReadFile(c.DataDir + "/setup-code"); e == nil {
+		slog.Info("first-run setup code", "code", strings.TrimSpace(string(code)), "file", c.DataDir+"/setup-code")
 	}
 	assets, e := fs.Sub(web.Dist, "dist")
 	if e != nil {

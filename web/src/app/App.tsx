@@ -1,19 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { api, setCSRF, APIError } from './api';
 import type { Me } from './types';
-import { DataProvider } from './state';
+import { DataProvider, VISITOR } from './state';
 import { AppShell } from './AppShell';
 import { AuthScreen } from '../features/auth/AuthScreen';
 import { LiquidsPage } from '../features/liquids/LiquidsPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
-import { AdminPage } from '../features/settings/AdminPage';
 import { ToolsPage } from '../features/tools/ToolsPage';
 import { NicotineCalculator } from '../features/tools/NicotineCalculator';
 import { Dialog, Button, ErrorMessage } from '../components/ui';
 export function App() {
   const [me, setMe] = useState<Me>();
-  const [mode, setMode] = useState<'setup' | 'login' | 'invite'>('login');
+  const [mode, setMode] = useState<'setup' | 'login'>('login');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>();
   const [expired, setExpired] = useState(false);
@@ -28,7 +27,6 @@ export function App() {
         const status = await api<{ setupRequired: boolean }>('/setup/status');
         if (!active) return;
         if (status.setupRequired) setMode('setup');
-        else if (location.pathname === '/invite') setMode('invite');
         else
           try {
             const user = await api<Me>('/me');
@@ -38,6 +36,7 @@ export function App() {
             }
           } catch (e) {
             if (!(e instanceof APIError) || e.status !== 401) throw e;
+            if (active) setMe(VISITOR);
           }
       } catch (e) {
         if (active) setError(e);
@@ -84,16 +83,17 @@ export function App() {
       return;
     await api('/auth/logout', 'POST');
     setCSRF('');
-    setMe(undefined);
+    setMe(VISITOR);
     setExpired(false);
     setMode('login');
-    history.replaceState(null, '', '/login');
-    setRoute('/login');
+    history.replaceState(null, '', '/dashboard');
+    setRoute('/dashboard');
   };
   const login = (next: Me) => {
     setCSRF(next.csrfToken);
     setMe(next);
-    if (!expired) {
+    setMode('login');
+    if (!expired && !routeRef.current.startsWith('/settings')) {
       history.replaceState(null, '', '/dashboard');
       setRoute('/dashboard');
     }
@@ -120,15 +120,11 @@ export function App() {
         </Button>
       </div>
     );
-  if (!me)
-    return (
-      <AuthScreen
-        mode={mode}
-        token={new URLSearchParams(location.search).get('token') || ''}
-        onSuccess={login}
-      />
-    );
+  if (mode === 'setup' || !me) return <AuthScreen mode="setup" onSuccess={login} />;
   const [path, search = ''] = route.split('?');
+  const signedIn = me.user.role !== 'visitor';
+  if (!signedIn && (path === '/login' || path === '/settings'))
+    return <AuthScreen mode="login" onSuccess={login} onBack={() => navigate('/dashboard')} />;
   return (
     <>
       <DataProvider key={me.user.id} me={me} setMe={setMe} logout={logout} navigate={navigate}>
@@ -141,12 +137,6 @@ export function App() {
             <NicotineCalculator />
           ) : path === '/settings' ? (
             <SettingsPage query={'?' + search} />
-          ) : path === '/admin' ? (
-            me.user.role === 'admin' ? (
-              <AdminPage />
-            ) : (
-              <p>Keine Berechtigung.</p>
-            )
           ) : path === '/dashboard' || path === '/' || path === '/login' ? (
             <DashboardPage />
           ) : (
@@ -157,7 +147,7 @@ export function App() {
           )}
         </AppShell>
       </DataProvider>
-      {expired && (
+      {expired && signedIn && (
         <Dialog title="Sitzung abgelaufen" onClose={() => {}} width="compact">
           <p>Erneut anmelden, um den Entwurf fortzusetzen.</p>
           <AuthScreen mode="login" onSuccess={login} embedded />

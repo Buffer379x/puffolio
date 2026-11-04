@@ -7,6 +7,7 @@ import re
 import subprocess
 
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
+VERSION = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+\Z')
 PLATFORMS = {'amd64', 'arm64'}
 
 
@@ -27,9 +28,11 @@ def platform_manifests(index):
     return found
 
 
-def validate_identity(index, configs, source_sha, digest, expected_digest):
+def validate_identity(index, configs, source_sha, digest, expected_digest, version):
     if not re.fullmatch(r'[0-9a-f]{40}', source_sha):
         raise ValueError('Invalid reviewed source SHA')
+    if not VERSION.fullmatch(version):
+        raise ValueError('Invalid version')
     if not DIGEST.fullmatch(digest) or digest != expected_digest:
         raise ValueError('Immutable index digest changed')
     for arch in platform_manifests(index):
@@ -40,7 +43,7 @@ def validate_identity(index, configs, source_sha, digest, expected_digest):
         required = {
             'org.opencontainers.image.source': 'https://github.com/Buffer379x/puffolio',
             'org.opencontainers.image.revision': source_sha,
-            'org.opencontainers.image.version': '0.1.0',
+            'org.opencontainers.image.version': version,
         }
         if any(labels.get(key) != value for key, value in required.items()):
             raise ValueError('Existing image does not match reviewed source/version')
@@ -53,12 +56,15 @@ def docker(*args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--image', required=True)
+    parser.add_argument('--version', required=True)
     parser.add_argument('--source-sha', required=True)
     parser.add_argument('--expected-digest', required=True)
     parser.add_argument('--output', required=True)
     args = parser.parse_args()
     image = args.image
-    digest = docker('buildx', 'imagetools', 'inspect', image + ':0.1.0', '--format', '{{.Manifest.Digest}}').strip()
+    if not VERSION.fullmatch(args.version):
+        raise SystemExit('Invalid version')
+    digest = docker('buildx', 'imagetools', 'inspect', image + ':' + args.version, '--format', '{{.Manifest.Digest}}').strip()
     if not DIGEST.fullmatch(digest) or digest != args.expected_digest:
         raise SystemExit('Immutable index digest changed')
     index = json.loads(docker('buildx', 'imagetools', 'inspect', image + '@' + digest, '--raw'))
@@ -67,13 +73,13 @@ def main():
         ref = image + '@' + platform_digest
         subprocess.run(['docker', 'pull', '--platform', 'linux/' + arch, ref], check=True, stdout=subprocess.DEVNULL)
         configs[arch] = json.loads(docker('image', 'inspect', ref))[0]
-    validate_identity(index, configs, args.source_sha, digest, args.expected_digest)
+    validate_identity(index, configs, args.source_sha, digest, args.expected_digest, args.version)
     # Recheck the version alias after reading all platform configurations.
-    if docker('buildx', 'imagetools', 'inspect', image + ':0.1.0', '--format', '{{.Manifest.Digest}}').strip() != digest:
+    if docker('buildx', 'imagetools', 'inspect', image + ':' + args.version, '--format', '{{.Manifest.Digest}}').strip() != digest:
         raise SystemExit('Immutable version alias moved during verification')
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps({'digest': digest, 'sourceSha': args.source_sha, 'version': '0.1.0', 'platforms': platform_manifests(index)}, sort_keys=True) + '\n')
+    output.write_text(json.dumps({'digest': digest, 'sourceSha': args.source_sha, 'version': args.version, 'platforms': platform_manifests(index)}, sort_keys=True) + '\n')
     print(digest)
 
 

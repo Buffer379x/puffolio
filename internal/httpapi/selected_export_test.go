@@ -104,9 +104,7 @@ func TestSelectedExportIsPrivateBoundedAndImportable(t *testing.T) {
 	if e != nil || len(imported.Items) != 1 || imported.Items[0].Name != "Selected" {
 		t.Fatal(imported, e)
 	}
-	foreign := c.do("POST", "/api/v1/admin/users", map[string]any{"username": "other", "displayName": "Other", "role": "user"}, 201)
-	other := &client{h: c.h, t: t}
-	other.do("POST", "/api/v1/auth/invite", map[string]any{"token": foreign["invitationToken"], "password": "Other-long-password"}, 200)
+	other, _ := secondAccount(t, c, s, "other")
 	foreignLiquid := other.do("POST", "/api/v1/liquids", map[string]any{"name": "Foreign"}, 201)
 	for _, ids := range [][]string{{}, {selected["id"].(string), foreignLiquid["id"].(string)}, {selected["id"].(string), "missing"}, {selected["id"].(string), selected["id"].(string)}, make([]string, 501)} {
 		bad := export(map[string]any{"ids": ids})

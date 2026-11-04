@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Puffolio API",
-    "version": "0.1.0",
-    "description": "Same-origin, private personal collections. UTC event timestamps; calendar dates YYYY-MM-DD; numbers are exact canonical decimal strings. Cookie sessions:7-day idle/30-day absolute. Mutation CSRF+Origin required. New required fields apply only to newly created liquids via requiredFrom cutoff. Field PATCH merges top-level properties; liquid PATCH merges submitted value keys, null removes. Import defaults preserve archived historical options."
+    "version": "0.2.0",
+    "description": "Same-origin. One administrator maintains the collection; read routes marked with an empty security requirement are public. Trash and media variant=master always require the session. UTC event timestamps; calendar dates YYYY-MM-DD; numbers are exact canonical decimal strings. Cookie sessions:7-day idle/30-day absolute. Mutation CSRF+Origin required. New required fields apply only to newly created liquids via requiredFrom cutoff. Field PATCH merges top-level properties; liquid PATCH merges submitted value keys, null removes. Import defaults preserve archived historical options."
   },
   "servers": [
     {
@@ -646,145 +646,6 @@
         }
       }
     },
-    "/api/v1/auth/invite": {
-      "post": {
-        "summary": "Consume one-time24h invitation",
-        "operationId": "post_api_v1_auth_invite",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Me"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": [],
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Origin"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "token": {
-                    "type": "string"
-                  },
-                  "password": {
-                    "type": "string"
-                  },
-                  "displayName": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "token",
-                  "password"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/auth/logout": {
       "post": {
         "summary": "Revoke current session",
@@ -1392,7 +1253,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "session": []
+          }
+        ]
       },
       "post": {
         "summary": "Create field (max100)",
@@ -2218,6 +2085,12 @@
               "format": "uuid"
             }
           }
+        ],
+        "security": [
+          {},
+          {
+            "session": []
+          }
         ]
       },
       "post": {
@@ -2701,6 +2574,12 @@
               }
             }
           }
+        ],
+        "security": [
+          {},
+          {
+            "session": []
+          }
         ]
       },
       "post": {
@@ -2943,6 +2822,12 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "session": []
           }
         ]
       },
@@ -3814,6 +3699,12 @@
               ]
             }
           }
+        ],
+        "security": [
+          {},
+          {
+            "session": []
+          }
         ]
       },
       "delete": {
@@ -4062,7 +3953,7 @@
     },
     "/api/v1/media/{id}/crop": {
       "post": {
-        "summary": "Create immutable4:3 crop revision",
+        "summary": "Create immutable square crop revision",
         "operationId": "post_api_v1_media_id_crop",
         "responses": {
           "201": {
@@ -4300,7 +4191,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "session": []
+          }
+        ]
       },
       "put": {
         "summary": "Replace personal preferences with version check",
@@ -4532,7 +4429,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "session": []
+          }
+        ]
       },
       "put": {
         "summary": "Replace personal dashboard with version check",
@@ -4804,7 +4707,13 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {},
+          {
+            "session": []
+          }
+        ]
       }
     },
     "/api/v1/saved-views": {
@@ -5779,433 +5688,6 @@
         "description": "Repeats destination compatibility and combined limits within the import transaction. An unsafe destination change after preview returns422 with no collection mutation."
       }
     },
-    "/api/v1/admin/users": {
-      "get": {
-        "summary": "Admin: list accounts",
-        "operationId": "get_api_v1_admin_users",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/User"
-                      }
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Admin: create account and one-time24h invitation",
-        "operationId": "post_api_v1_admin_users",
-        "responses": {
-          "201": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "user": {
-                      "$ref": "#/components/schemas/User"
-                    },
-                    "invitationToken": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "user",
-                    "invitationToken"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Origin"
-          },
-          {
-            "$ref": "#/components/parameters/CSRF"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "username": {
-                    "type": "string"
-                  },
-                  "displayName": {
-                    "type": "string"
-                  },
-                  "role": {
-                    "enum": [
-                      "admin",
-                      "user"
-                    ]
-                  }
-                },
-                "required": [
-                  "username",
-                  "displayName",
-                  "role"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/admin/users/{id}": {
-      "patch": {
-        "summary": "Admin: update account; preserve last active admin",
-        "operationId": "patch_api_v1_admin_users_id",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/User"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "$ref": "#/components/parameters/Origin"
-          },
-          {
-            "$ref": "#/components/parameters/CSRF"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "version": {
-                    "type": "integer",
-                    "minimum": 1
-                  },
-                  "disabled": {
-                    "type": "boolean"
-                  },
-                  "role": {
-                    "enum": [
-                      "admin",
-                      "user"
-                    ]
-                  },
-                  "displayName": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/admin/system": {
       "get": {
         "summary": "Admin: system status without secrets",
@@ -7006,6 +6488,22 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/Value"
             }
+          },
+          "shelfLife": {
+            "type": "object",
+            "description": "Derived on read; absent when no bar applies.",
+            "properties": {
+              "percent": {
+                "type": "integer"
+              },
+              "expiresOn": {
+                "type": "string",
+                "format": "date"
+              },
+              "expired": {
+                "type": "boolean"
+              }
+            }
           }
         },
         "required": [
@@ -7184,7 +6682,7 @@
           "width",
           "height"
         ],
-        "description": "Normalized oriented-master coordinates. Physical pixel rectangle must be4:3 within1.5px; bounds checked by server."
+        "description": "Normalized oriented-master coordinates. Physical pixel rectangle must be square (imports also accept 4:3 from 0.1.0) within1.5px; bounds checked by server."
       },
       "Media": {
         "type": "object",
@@ -7280,8 +6778,27 @@
               "quantity": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "purchase": {
+                "type": "string"
+              },
+              "shelfOverride": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
               }
             }
+          },
+          "shelfLifeMonths": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1200,
+            "description": "Default storage time from roles.purchase; roles.shelfOverride holds a liquid's own value in months. 0 means no default."
+          },
+          "consumedOption": {
+            "type": "string",
+            "description": "Option of roles.status that means used up: no shelf life."
           }
         },
         "required": [
@@ -7311,7 +6828,9 @@
               "recent",
               "low",
               "tags",
-              "dates"
+              "dates",
+              "expired",
+              "expiring"
             ]
           },
           "title": {
@@ -7351,6 +6870,14 @@
           },
           "filters": {
             "$ref": "#/components/schemas/Filter"
+          },
+          "window": {
+            "type": "string",
+            "enum": [
+              "past",
+              "upcoming"
+            ],
+            "description": "Relative date window; replaces from/to."
           }
         },
         "required": [

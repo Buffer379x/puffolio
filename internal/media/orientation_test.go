@@ -45,7 +45,7 @@ func TestCropUsesOrientedMaster(t *testing.T) {
 	if m.Width != 40 || m.Height != 30 {
 		t.Fatalf("not oriented: %dx%d", m.Width, m.Height)
 	}
-	if _, e = New(s).Crop(ctx, u.CollectionID, m.ID, Crop{Width: 1, Height: 1}); e != nil {
+	if _, e = New(s).Crop(ctx, u.CollectionID, m.ID, Crop{Width: 0.75, Height: 1}); e != nil {
 		t.Fatal(e)
 	}
 }

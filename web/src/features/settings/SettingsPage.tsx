@@ -4,6 +4,7 @@ import { FieldsSettings } from '../fields/FieldsSettings';
 import { TagsSettings } from './TagsSettings';
 import { ProfileSettings } from './ProfileSettings';
 import { DataSettings } from './DataSettings';
+import { SystemSettings } from './SystemSettings';
 export function SettingsPage({ query }: { query: string }) {
   const { navigate } = useApp();
   const section = new URLSearchParams(query).get('section') || 'fields';
@@ -37,7 +38,10 @@ export function SettingsPage({ query }: { query: string }) {
       ) : section === 'profile' ? (
         <ProfileSettings />
       ) : section === 'data' ? (
-        <DataSettings />
+        <>
+          <DataSettings />
+          <SystemSettings />
+        </>
       ) : (
         <p>Bereich nicht gefunden.</p>
       )}

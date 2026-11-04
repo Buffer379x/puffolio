@@ -73,12 +73,24 @@ func (s *server) putPreferences(w http.ResponseWriter, r *http.Request) error {
 			seen[id] = true
 		}
 	}
-	roleTypes := map[string]string{"image": "image", "rating": "rating", "color": "color", "quantity": "number"}
+	if p.ShelfLifeMonths < 0 || p.ShelfLifeMonths > 1200 {
+		return fault.Validation("Haltedauer höchstens 100 Jahre")
+	}
+	roleTypes := map[string]string{"image": "image", "rating": "rating", "color": "color", "quantity": "number", "purchase": "date", "shelfOverride": "number", "status": "select"}
 	for role, id := range p.Roles {
 		typ, ok := roleTypes[role]
 		d, exists := dm[id]
 		if !ok || id != "" && (!exists || d.Type != typ || d.Archived) {
 			return fault.Validation("Ungültige Feldzuordnung")
+		}
+	}
+	if p.ConsumedOption != "" {
+		found := false
+		for _, option := range dm[p.Roles["status"]].Config.Options {
+			found = found || option.ID == p.ConsumedOption
+		}
+		if !found {
+			return fault.Validation("Ungültige Statuszuordnung")
 		}
 	}
 	old := p.Version
@@ -128,6 +140,47 @@ func (s *server) putDashboard(w http.ResponseWriter, r *http.Request) error {
 	write(w, 200, l)
 	return nil
 }
+
+// shelfRules reads the owner's storage-time settings. Rules are nil until a date field
+// is assigned; a field archived later simply switches its part of the rule off.
+func (s *server) shelfRules(r *http.Request) (string, *liquids.ShelfRules, error) {
+	p, e := s.loadPreferences(r)
+	if e != nil {
+		return "", nil, e
+	}
+	loc, e := time.LoadLocation(p.Timezone)
+	if e != nil {
+		return "", nil, e
+	}
+	today := time.Now().In(loc).Format("2006-01-02")
+	defs, e := fields.List(r.Context(), s.Store.DB, current(r).User.CollectionID)
+	if e != nil {
+		return "", nil, e
+	}
+	active := func(role, kind string) *fields.Definition {
+		for i := range defs {
+			if defs[i].ID == p.Roles[role] && defs[i].Type == kind && !defs[i].Archived {
+				return &defs[i]
+			}
+		}
+		return nil
+	}
+	purchase := active("purchase", "date")
+	if purchase == nil {
+		return today, nil, nil
+	}
+	rules := &liquids.ShelfRules{PurchaseField: purchase.ID, DefaultMonths: p.ShelfLifeMonths, Today: today}
+	if override := active("shelfOverride", "number"); override != nil {
+		rules.OverrideField, rules.OverrideScale = override.ID, override.Config.Scale
+	}
+	if status := active("status", "select"); status != nil && p.ConsumedOption != "" {
+		rules.StatusField, rules.ConsumedOption = status.ID, p.ConsumedOption
+	}
+	if rules.DefaultMonths <= 0 && rules.OverrideField == "" {
+		return today, nil, nil
+	}
+	return today, rules, nil
+}
 func (s *server) queryDashboard(w http.ResponseWriter, r *http.Request) error {
 	var in struct {
 		Widgets []Widget `json:"widgets"`
@@ -135,7 +188,11 @@ func (s *server) queryDashboard(w http.ResponseWriter, r *http.Request) error {
 	if e := decode(w, r, &in); e != nil {
 		return e
 	}
-	items, e := dashboard.Query(r.Context(), s.Store.DB, current(r).User.CollectionID, in.Widgets)
+	today, rules, e := s.shelfRules(r)
+	if e != nil {
+		return e
+	}
+	items, e := dashboard.QueryAt(r.Context(), s.Store.DB, current(r).User.CollectionID, in.Widgets, dashboard.Options{Today: today, Shelf: rules})
 	if e != nil {
 		return e
 	}

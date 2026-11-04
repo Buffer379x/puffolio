@@ -1,27 +1,37 @@
-import { useApp, useAction } from '../../app/state';
+import { useApp, useAction, useCanEdit } from '../../app/state';
 import type { Liquid, Tag } from '../../app/types';
 import { api } from '../../app/api';
 import { useState } from 'react';
 import { Dialog, Button, ErrorMessage, Confirm, Icon } from '../../components/ui';
 import { FieldValue } from '../../components/FieldValue';
+import { LiquidImage } from '../../components/LiquidImage';
+import { ShelfBar } from '../../components/ShelfBar';
+import { formatDate } from '../fields/values';
 export function LiquidDetail({
-  liquid,
+  liquid: initial,
   tags,
   onClose,
   onEdit,
   onDuplicate,
   onChange,
+  onTrashed,
 }: {
   liquid: Liquid;
   tags: Tag[];
   onClose: () => void;
   onEdit: () => void;
   onDuplicate: () => void;
-  onChange: () => void;
+  onChange: (liquid?: Liquid) => void;
+  onTrashed?: (liquid: Liquid) => void;
 }) {
-  const { fields } = useApp();
+  const { fields, preferences } = useApp();
+  const [liquid, setLiquid] = useState(initial);
   const a = useAction();
+  const canEdit = useCanEdit();
   const [remove, setRemove] = useState(false);
+  const shown = fields.filter(
+    (f) => !f.archived && f.visibility.detail && f.id !== preferences.roles.image,
+  );
   return (
     <>
       <Dialog
@@ -29,43 +39,61 @@ export function LiquidDetail({
         width="wide"
         onClose={onClose}
         footer={
-          <>
-            <Button variant="danger" onClick={() => setRemove(true)}>
-              Löschen
-            </Button>
-            <Button onClick={onDuplicate}>Duplizieren</Button>
-            <Button
-              onClick={() =>
-                void a.run(async () => {
-                  await api('/liquids/' + liquid.id, 'PATCH', {
-                    version: liquid.version,
-                    favorite: !liquid.favorite,
-                  });
-                  onChange();
-                  onClose();
-                })
-              }
-            >
-              <Icon name="star" />
-              {liquid.favorite ? 'Favorit entfernen' : 'Favorit'}
-            </Button>
-            <Button variant="primary" onClick={onEdit}>
-              Bearbeiten
-            </Button>
-          </>
+          canEdit ? (
+            <>
+              <Button variant="danger" className="push-left" onClick={() => setRemove(true)}>
+                Löschen
+              </Button>
+              <Button onClick={onDuplicate}>
+                <Icon name="copy" />
+                Duplizieren
+              </Button>
+              <Button
+                aria-pressed={liquid.favorite}
+                onClick={() =>
+                  void a.run(async () => {
+                    const next = await api<Liquid>('/liquids/' + liquid.id, 'PATCH', {
+                      version: liquid.version,
+                      favorite: !liquid.favorite,
+                    });
+                    setLiquid(next);
+                    onChange(next);
+                  })
+                }
+              >
+                <Icon name="heart" />
+                {liquid.favorite ? 'Favorit entfernen' : 'Favorit'}
+              </Button>
+              <Button variant="primary" onClick={onEdit}>
+                <Icon name="edit" />
+                Bearbeiten
+              </Button>
+            </>
+          ) : undefined
         }
       >
+        {preferences.images && (
+          <div className="details-visual">
+            <LiquidImage liquid={liquid} tags={tags} full />
+          </div>
+        )}
         <dl className="details-grid">
-          {fields
-            .filter((f) => !f.archived && f.visibility.detail)
-            .map((f) => (
-              <div key={f.id}>
-                <dt>{f.label}</dt>
-                <dd>
-                  <FieldValue field={f} value={liquid.values[f.id]?.value} tags={tags} />
-                </dd>
-              </div>
-            ))}
+          {liquid.shelfLife && (
+            <div className="full">
+              <dt>Haltbarkeit bis {formatDate(liquid.shelfLife.expiresOn)}</dt>
+              <dd>
+                <ShelfBar liquid={liquid} />
+              </dd>
+            </div>
+          )}
+          {shown.map((f) => (
+            <div key={f.id} className={f.type === 'longtext' || f.type === 'tags' ? 'full' : ''}>
+              <dt>{f.label}</dt>
+              <dd>
+                <FieldValue field={f} value={liquid.values[f.id]?.value} tags={tags} />
+              </dd>
+            </div>
+          ))}
         </dl>
         <ErrorMessage error={a.error} />
       </Dialog>
@@ -76,9 +104,12 @@ export function LiquidDetail({
           onCancel={() => setRemove(false)}
           onConfirm={() =>
             void a.run(async () => {
-              await api('/liquids/' + liquid.id, 'DELETE', { version: liquid.version });
+              const trashed = await api<Liquid>('/liquids/' + liquid.id, 'DELETE', {
+                version: liquid.version,
+              });
               onChange();
               onClose();
+              onTrashed?.(trashed);
             })
           }
         >

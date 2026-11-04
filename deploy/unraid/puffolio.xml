@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Container version="2">
   <Name>Puffolio</Name>
-  <Repository>ghcr.io/buffer379x/puffolio:0.1.0</Repository>
+  <Repository>ghcr.io/buffer379x/puffolio:0.2.0</Repository>
   <Registry>https://ghcr.io/buffer379x/puffolio</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Privileged>false</Privileged>
   <Project>https://github.com/Buffer379x/puffolio</Project>
   <Support>https://github.com/Buffer379x/puffolio/issues</Support>
-  <Overview>Selbst gehostete Verwaltung persönlicher Vaping-Liquids mit eigenen Feldern, Datumsfeldern, Dashboard, Bildern und mehreren Benutzern.</Overview>
-  <Description>Ein Container mit SQLite. Das Appdata-Verzeichnis muss auf lokalem Speicher liegen und für UID 99 / GID 100 beschreibbar sein. Der Setup-Code liegt nach dem ersten Start in /data/setup-code.</Description>
+  <Overview>Selbst gehostete Vaping-Liquid-Sammlung mit eigenen Feldern, Dashboard, Bildern und Haltbarkeitsanzeige. Ein Administrator pflegt, alle anderen können lesen.</Overview>
+  <Description>Ein Container mit SQLite. Das Appdata-Verzeichnis muss auf lokalem Speicher liegen und für UID 99 / GID 100 beschreibbar sein. Den Setup-Code zeigt beim ersten Start das Log des Containers. Die Sammlung ist für alle lesbar, die die Adresse erreichen; ändern kann nur der angemeldete Administrator.</Description>
   <Category>Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
-  <Icon>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.1.0/assets/brand/icon-256.png</Icon>
-  <TemplateURL>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.1.0/deploy/unraid/puffolio.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.2.0/assets/brand/icon-256.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.2.0/deploy/unraid/puffolio.xml</TemplateURL>
   <ExtraParams>--restart=unless-stopped --stop-timeout=20 --user=99:100 --read-only --cap-drop=ALL --security-opt=no-new-privileges --tmpfs=/tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777</ExtraParams>
   <Config Name="WebUI-Port" Target="8080" Default="8787" Mode="tcp" Description="HTTP-Port der Weboberfläche" Type="Port" Display="always" Required="true" Mask="false">8787</Config>
   <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/puffolio" Mode="rw" Description="Lokale SQLite-Datenbank, Bilder und Sicherungen. Schreibrechte für 99:100 erforderlich. Kein SMB-/NFS-Mount." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/puffolio</Config>
-  <Config Name="Basis-URL" Target="PUFFOLIO_BASE_URL" Default="" Mode="" Description="Vollständige URL, unter der Puffolio erreichbar ist, z. B. http://192.168.1.10:8787" Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Basis-URL" Target="PUFFOLIO_BASE_URL" Default="" Mode="" Description="Optional. Leer lassen, damit Puffolio unter jeder aufgerufenen Adresse funktioniert. Gesetzt gilt ausschließlich diese URL, z. B. https://puffolio.example" Type="Variable" Display="advanced" Required="false" Mask="false"/>
   <Config Name="HTTPS-Cookies" Target="PUFFOLIO_COOKIE_SECURE" Default="false" Mode="" Description="Bei Zugriff über HTTPS auf true setzen; bei direktem lokalem HTTP false." Type="Variable" Display="advanced" Required="true" Mask="false">false</Config>
   <Config Name="Zeitzone" Target="TZ" Default="Europe/Berlin" Mode="" Description="Standardzeitzone der Instanz" Type="Variable" Display="advanced" Required="true" Mask="false">Europe/Berlin</Config>
 </Container>

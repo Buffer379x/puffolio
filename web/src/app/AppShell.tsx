@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { useApp, useAction } from './state';
+import { useApp, useAction, useCanEdit } from './state';
 import { Icon, IconButton, SegmentedControl, ErrorMessage } from '../components/ui';
 const links = [
   ['/dashboard', 'Dashboard', 'dashboard'],
   ['/liquids', 'Liquids', 'liquids'],
   ['/tools', 'Tools', 'tools'],
   ['/settings', 'Einstellungen', 'settings'],
-  ['/admin', 'Verwaltung', 'admin'],
 ];
 export function AppShell({ path, children }: { path: string; children: ReactNode }) {
   const { me, preferences, savePreferences, navigate, logout } = useApp();
@@ -17,6 +16,7 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
   const content = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const a = useAction();
+  const canEdit = useCanEdit();
   const close = () => {
     setOpen(false);
   };
@@ -74,10 +74,6 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
     if (mobile) setOpen(false);
     navigate(url);
   };
-  const title =
-    path === '/tools/nicotine'
-      ? 'Nikotinrechner'
-      : links.find(([url]) => path.startsWith(url))?.[1] || 'Seite';
   return (
     <>
       <a href="#main" className="skip-link">
@@ -106,10 +102,9 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
             onClick={close}
           />
         )}
-        <div className="workspace-label">Persönliche Sammlung</div>
         <nav>
           {links
-            .filter(([url]) => url !== '/admin' || me.user.role === 'admin')
+            .filter(([url]) => url !== '/settings' || canEdit)
             .map(([url, label, icon]) => (
               <a
                 className={'nav-item ' + (path.startsWith(url) ? 'active' : '')}
@@ -132,57 +127,70 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
               label="Erscheinungsbild"
               value={preferences.theme}
               options={[
-                { value: 'light', label: 'Hell' },
-                { value: 'dark', label: 'Dunkel' },
-                { value: 'system', label: 'System' },
+                { value: 'light', label: 'Hell', icon: 'sun' },
+                { value: 'dark', label: 'Dunkel', icon: 'moon' },
+                { value: 'system', label: 'System', icon: 'system' },
               ]}
               onChange={(theme) => void a.run(() => savePreferences({ theme }))}
             />
           </div>
           <ErrorMessage error={a.error} />
-          <div className="sidebar-profile">
-            <div className="avatar" aria-hidden="true">
-              {me.user.displayName.slice(0, 2).toLocaleUpperCase('de')}
+          {canEdit ? (
+            <div className="sidebar-profile">
+              <div className="avatar" aria-hidden="true">
+                {me.user.displayName.slice(0, 2).toLocaleUpperCase('de')}
+              </div>
+              <a
+                href="/settings?section=profile"
+                onClick={(e) => {
+                  e.preventDefault();
+                  go('/settings?section=profile');
+                }}
+              >
+                <strong>{me.user.displayName}</strong>
+                <span>Administrator</span>
+              </a>
+              <IconButton label="Abmelden" icon="logout" onClick={() => void a.run(logout)} />
             </div>
-            <a
-              href="/settings?section=profile"
-              onClick={(e) => {
-                e.preventDefault();
-                go('/settings?section=profile');
-              }}
-            >
-              <strong>{me.user.displayName}</strong>
-              <span>{me.user.role === 'admin' ? 'Administrator' : 'Nutzer'}</span>
-            </a>
-            <IconButton label="Abmelden" icon="logout" onClick={() => void a.run(logout)} />
-          </div>
+          ) : (
+            <div className="sidebar-profile">
+              <a
+                className="nav-item"
+                href="/login"
+                onClick={(e) => {
+                  e.preventDefault();
+                  go('/login');
+                }}
+              >
+                <Icon name="logout" />
+                Anmelden
+              </a>
+            </div>
+          )}
         </div>
       </aside>
       <div ref={content} className="app-shell">
         <header className="topbar">
-          <div className="breadcrumb">
-            <button
-              ref={toggle}
-              className="icon-button menu-toggle"
-              type="button"
-              aria-label="Menü öffnen"
-              aria-expanded={open}
-              onClick={() => setOpen(true)}
-            >
-              <Icon name="menu" />
-            </button>
-            <span>puffolio</span>
-            <span className="breadcrumb-slash">/</span>
-            <strong>{title}</strong>
+          <button
+            ref={toggle}
+            className="icon-button menu-toggle"
+            type="button"
+            aria-label="Menü öffnen"
+            aria-expanded={open}
+            onClick={() => setOpen(true)}
+          >
+            <Icon name="menu" />
+          </button>
+          <div className="brand" aria-hidden="true">
+            <img src="/brand/mark.svg" alt="" />
+            <span>
+              puffolio<span className="brand-period">.</span>
+            </span>
           </div>
         </header>
         <main id="main" tabIndex={-1}>
           {children}
         </main>
-        <footer className="app-footer">
-          <span>puffolio</span>
-          <span>Persönliche Sammlung</span>
-        </footer>
       </div>
     </>
   );

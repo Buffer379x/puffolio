@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { api, setCSRF } from './api';
 import type { Field, Preferences, Me } from './types';
+import { ToastProvider } from '../components/toast';
 export const AppContext = createContext<{
   me: Me;
   setMe: (m: Me) => void;
@@ -21,6 +22,21 @@ export const AppContext = createContext<{
   navigate: (path: string) => void;
 }>({} as never);
 export const useApp = () => useContext(AppContext);
+/** Everyone can look; only the signed-in administrator changes anything. The server enforces it. */
+export const VISITOR: Me = {
+  user: { id: 'visitor', username: '', displayName: 'Besuch', role: 'visitor', version: 0 },
+  collectionId: '',
+  csrfToken: '',
+};
+export const useCanEdit = () => useApp().me?.user.role !== 'visitor';
+const VISITOR_VIEW = 'puffolio-visitor-view';
+function readVisitorView(): Partial<Preferences> {
+  try {
+    return JSON.parse(localStorage.getItem(VISITOR_VIEW) || '{}');
+  } catch {
+    return {};
+  }
+}
 export function useLoad<T>(loader: (signal: AbortSignal) => Promise<T>, deps: unknown[] = []) {
   const [data, setData] = useState<T>();
   const [error, setError] = useState<unknown>();
@@ -114,6 +130,7 @@ export function DataProvider({
   navigate: (s: string) => void;
   children: ReactNode;
 }) {
+  const visitor = me.user.role === 'visitor';
   const [fields, setFields] = useState<Field[]>([]);
   const [schemaVersion, setVersion] = useState(1);
   const [preferences, setPreferences] = useState<Preferences>();
@@ -125,8 +142,8 @@ export function DataProvider({
     ]);
     setFields(f.items || []);
     setVersion(f.version);
-    setPreferences(p);
-  }, []);
+    setPreferences(visitor ? { ...p, theme: 'system', ...readVisitorView() } : p);
+  }, [visitor]);
   useEffect(() => {
     setCSRF(me.csrfToken);
     refresh().catch(setError);
@@ -134,6 +151,19 @@ export function DataProvider({
   const savePreferences = async (patch: Partial<Preferences>) => {
     if (!preferences) return;
     const next = { ...preferences, ...patch };
+    if (visitor) {
+      const { theme, view, images, listFields, gridFields } = next;
+      setPreferences(next);
+      try {
+        localStorage.setItem(
+          VISITOR_VIEW,
+          JSON.stringify({ theme, view, images, listFields, gridFields }),
+        );
+      } catch {
+        /* Private mode: the choice simply lasts for this page view. */
+      }
+      return;
+    }
     const existing = new Set(fields.map((f) => f.id));
     next.listFields = next.listFields.filter((id) => existing.has(id));
     next.gridFields = next.gridFields.filter((id) => existing.has(id));
@@ -173,7 +203,7 @@ export function DataProvider({
       }}
     >
       <Theme theme={preferences.theme} />
-      {children}
+      <ToastProvider>{children}</ToastProvider>
     </AppContext.Provider>
   );
 }

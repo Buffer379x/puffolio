@@ -35,6 +35,16 @@ func TestAllTypesMediaTagsAndWidgetRoundtrip(t *testing.T) {
 		t.Fatal(e)
 	}
 	fields.Save(ctx, s.DB, u.CollectionID, fields.Definition{Label: "YesNo", Type: "boolean"}, true)
+	numberField := ""
+	starter, e := fields.List(ctx, s.DB, u.CollectionID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, d := range starter {
+		if d.Type == "number" && numberField == "" {
+			numberField = d.ID
+		}
+	}
 	defs, e := fields.List(ctx, s.DB, u.CollectionID)
 	if e != nil {
 		t.Fatal(e)
@@ -60,6 +70,9 @@ func TestAllTypesMediaTagsAndWidgetRoundtrip(t *testing.T) {
 			value = 4
 		case "number":
 			value = "0.0"
+			if d.Config.Scale == 0 {
+				value = "24"
+			}
 		case "date":
 			value = "2028-02-29"
 		case "boolean":
@@ -94,10 +107,10 @@ func TestAllTypesMediaTagsAndWidgetRoundtrip(t *testing.T) {
 		}
 	}
 	filterValue, _ := json.Marshal([]string{selectOption})
-	widgets := []dashboard.Widget{{ID: store.ID(), Type: "sum", Size: "small", Title: "Amount", FieldID: roles["quantity"], Filters: &liquids.Filter{Op: "and", Conditions: []liquids.Filter{{FieldID: selectField, Operator: "any", Value: filterValue}, {FieldID: "favorite", Operator: "eq", Value: json.RawMessage("false")}}}}}
+	widgets := []dashboard.Widget{{ID: store.ID(), Type: "sum", Size: "small", Title: "Amount", FieldID: numberField, Filters: &liquids.Filter{Op: "and", Conditions: []liquids.Filter{{FieldID: selectField, Operator: "any", Value: filterValue}, {FieldID: "favorite", Operator: "eq", Value: json.RawMessage("false")}}}}}
 	raw, _ = json.Marshal(widgets)
 	s.DB.Exec("INSERT INTO dashboards(user_id,data) VALUES(?,?)", u.ID, string(raw))
-	view := map[string]any{"id": store.ID(), "name": "Number", "search": "", "sort": "field:" + roles["quantity"], "direction": "asc", "version": 1, "favorite": true}
+	view := map[string]any{"id": store.ID(), "name": "Number", "search": "", "sort": "field:" + numberField, "direction": "asc", "version": 1, "favorite": true}
 	raw, _ = json.Marshal(view)
 	s.DB.Exec("INSERT INTO saved_views(id,user_id,data) VALUES(?,?,?)", view["id"], u.ID, string(raw))
 	var archive bytes.Buffer
@@ -128,7 +141,7 @@ func TestAllTypesMediaTagsAndWidgetRoundtrip(t *testing.T) {
 		}
 		switch v.Type {
 		case "number":
-			if string(v.Value) != `"0.0"` {
+			if string(v.Value) != `"0.0"` && string(v.Value) != `"24"` {
 				t.Fatal("zero changed")
 			}
 		case "boolean":
@@ -175,7 +188,7 @@ func TestAllTypesMediaTagsAndWidgetRoundtrip(t *testing.T) {
 	if e != nil || results[0].Count == nil || *results[0].Count != 1 {
 		t.Fatalf("imported select filter did not match: %+v %v", results, e)
 	}
-	if len(got) != 1 || got[0].FieldID == roles["quantity"] {
+	if len(got) != 1 || got[0].FieldID == numberField {
 		t.Fatal("widget field reference not remapped")
 	}
 }

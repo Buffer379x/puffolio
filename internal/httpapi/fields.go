@@ -36,6 +36,9 @@ func (s *server) createField(w http.ResponseWriter, r *http.Request) error {
 	if e != nil {
 		return e
 	}
+	if e = s.showInViews(r, d.ID, d.Visibility.List, d.Visibility.Grid); e != nil {
+		return e
+	}
 	write(w, 201, d)
 	return nil
 }
@@ -70,8 +73,45 @@ func (s *server) updateField(w http.ResponseWriter, r *http.Request) error {
 	if e != nil {
 		return e
 	}
+	if e = s.showInViews(r, d.ID, d.Visibility.List && !old.Visibility.List, d.Visibility.Grid && !old.Visibility.Grid); e != nil {
+		return e
+	}
 	write(w, 200, d)
 	return nil
+}
+
+// showInViews adds a field the owner just made visible to their column choices.
+// "Ansicht" can still hide it again; it only never appears by omission.
+func (s *server) showInViews(r *http.Request, id string, list, grid bool) error {
+	if !list && !grid {
+		return nil
+	}
+	p, e := s.loadPreferences(r)
+	if e != nil {
+		return e
+	}
+	add := func(ids []string) []string {
+		for _, existing := range ids {
+			if existing == id {
+				return ids
+			}
+		}
+		return append(ids, id)
+	}
+	if list {
+		p.ListFields = add(p.ListFields)
+	}
+	if grid {
+		p.GridFields = add(p.GridFields)
+	}
+	version := p.Version
+	p.Version++
+	raw, e := json.Marshal(p)
+	if e != nil {
+		return e
+	}
+	_, e = s.Store.DB.ExecContext(r.Context(), "UPDATE user_preferences SET version=?,data=? WHERE user_id=? AND version=?", p.Version, string(raw), current(r).User.ID, version)
+	return e
 }
 func (s *server) archiveField(w http.ResponseWriter, r *http.Request) error {
 	var in struct {

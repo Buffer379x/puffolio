@@ -5,7 +5,7 @@ import { useState, useId, useEffect, useRef } from 'react';
 import type { Field, Scalar, Tag, Media } from '../app/types';
 import { api, upload } from '../app/api';
 import { useAction, useLoad } from '../app/state';
-import { Button, Dialog, ErrorMessage, FormField, IconButton } from './ui';
+import { Button, Dialog, ErrorMessage, FormField, Icon, IconButton } from './ui';
 import { PalettePicker, paletteColor } from './PalettePicker';
 import { ImageCropEditor } from './ImageCropEditor';
 export function TagDialog({
@@ -95,7 +95,7 @@ export function TagsInput({
     <>
       <div className="tag-options">
         {tags.data?.items.map((t) => (
-          <label key={t.id} className="check-row">
+          <label key={t.id} className="tag-toggle">
             <input
               type="checkbox"
               aria-describedby={describedBy}
@@ -108,6 +108,7 @@ export function TagsInput({
               }
             />
             <span className="tag" style={{ backgroundColor: paletteColor(t.paletteId) }}>
+              <Icon name="check" />
               {t.name}
             </span>
           </label>
@@ -169,7 +170,7 @@ export function RatingInput({
             checked={value === i + 1}
             onChange={() => onChange(i + 1)}
           />
-          <span aria-hidden="true">★</span>
+          <Icon name="star" />
         </label>
       ))}
       <IconButton icon="close" label={`${label} entfernen`} onClick={() => onChange(null)} />
@@ -183,6 +184,7 @@ export function FieldInput({
   error,
   isNew = false,
   compact = false,
+  fallback,
 }: {
   field: Field;
   value: Scalar;
@@ -190,6 +192,8 @@ export function FieldInput({
   error?: string;
   isNew?: boolean;
   compact?: boolean;
+  /** Says what applies while the field stays empty. */
+  fallback?: string;
 }) {
   const [media, setMedia] = useState<Media>();
   const uploadController = useRef<AbortController | null>(null);
@@ -200,7 +204,7 @@ export function FieldInput({
   const hint =
     isNew && field.type === 'date' && field.config.defaultToday && value === null
       ? 'Heute beim Anlegen'
-      : undefined;
+      : fallback;
   return (
     <FormField
       label={label}
@@ -279,7 +283,11 @@ export function FieldInput({
               <>
                 <div className="image-control">
                   {value && (
-                    <img className="item-image" src={'/api/v1/media/' + value} alt={label} />
+                    <img
+                      className="item-image"
+                      src={'/api/v1/media/' + value + '?variant=thumbnail'}
+                      alt={label}
+                    />
                   )}
                   <label className="button secondary upload-button">
                     {a.busy ? 'Hochladen…' : 'Bild auswählen'}

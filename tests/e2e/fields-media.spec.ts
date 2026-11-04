@@ -27,13 +27,13 @@ test('dynamic dates, false and zero work; required scalar backfill is explicit',
   await app.page.getByLabel('Name', { exact: true }).fill('Datum und Null');
   await app.page.getByLabel('Prüfdatum', { exact: true }).fill('2028-02-29');
   await app.page.getByRole('combobox', { name: 'Geprüft', exact: true }).selectOption('false');
-  await app.page.getByLabel('Menge', { exact: true }).fill('0');
+  await app.page.getByLabel('Nikotin', { exact: true }).fill('0');
   await app.page.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(app.page.getByRole('dialog')).not.toBeVisible();
   const saved = (await (await app.api.get('/api/v1/liquids?search=Datum')).json()).items[0];
   expect(saved.values[flag.id].value).toBe(false);
   expect(saved.values[defs.find((f) => f.label === 'Prüfdatum').id].value).toBe('2028-02-29');
-  expect(saved.values[defs.find((f) => f.label === 'Menge').id].value).toBe('0.0');
+  expect(saved.values[defs.find((f) => f.label === 'Nikotin').id].value).toBe('0.0');
 });
 test('new upload crops immediately; canceling recrop retains old immutable image reference', async ({
   app,
@@ -56,7 +56,7 @@ test('new upload crops immediately; canceling recrop retains old immutable image
   const image = defs.find((f) => f.type === 'image');
   const liquid = (await (await app.api.get('/api/v1/liquids')).json()).items[0];
   const original = liquid.values[image.id].value;
-  await app.page.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
+  await app.page.getByRole('button', { name: /bearbeiten$/ }).click();
   await app.page.getByLabel('Name', { exact: true }).fill('Bildtest Entwurf');
   const cropOpener = app.page.getByRole('button', { name: 'Ausschnitt ändern', exact: true });
   await cropOpener.focus();
@@ -74,7 +74,7 @@ test('new upload crops immediately; canceling recrop retains old immutable image
   expect(
     (await (await app.api.get('/api/v1/liquids/' + liquid.id)).json()).values[image.id].value,
   ).toBe(original);
-  await app.page.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
+  await app.page.getByRole('button', { name: /bearbeiten$/ }).click();
   await app.page.getByRole('button', { name: 'Ausschnitt ändern', exact: true }).click();
   await crop.getByLabel('Zoom', { exact: true }).fill('3');
   await crop.getByRole('button', { name: 'Ausschnitt übernehmen', exact: true }).click();
