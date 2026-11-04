@@ -218,15 +218,7 @@ jobs:
           upload-artifact: false
           upload-release-assets: false
       - name: Record complete vulnerability findings
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          version: v0.76.1
-          image-ref: ghcr.io/buffer379x/puffolio@${{ steps.platform.outputs.digest }}
-          format: json
-          output: work/release-assets/scan-${{ matrix.arch }}.json
-          scanners: vuln
-          ignore-unfixed: false
-          exit-code: '0'
+        run: bash docs/scripts/scan-image.sh "$IMAGE@${{ steps.platform.outputs.digest }}" "work/release-assets/scan-$ARCH.json" "linux/$ARCH"
       - name: Enforce runtime vulnerability policy
         run: python3 docs/scripts/scan-policy.py "work/release-assets/scan-$ARCH.json"
       - name: Preserve verification evidence
