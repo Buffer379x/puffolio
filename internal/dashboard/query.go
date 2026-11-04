@@ -23,6 +23,7 @@ type Widget struct {
 	Inclusive bool            `json:"inclusive,omitempty"`
 	From      string          `json:"from,omitempty"`
 	To        string          `json:"to,omitempty"`
+	Window    string          `json:"window,omitempty"`
 	Filters   *liquids.Filter `json:"filters,omitempty"`
 }
 type TagCount struct {
@@ -56,7 +57,7 @@ func Validate(widgets []Widget) error {
 		}
 		seen[w.ID] = true
 		switch w.Type {
-		case "count", "sum", "favorites", "average", "recent", "low", "tags", "dates":
+		case "count", "sum", "favorites", "average", "recent", "low", "tags", "dates", "expired", "expiring":
 		default:
 			return fault.Validation("Unbekannter Widgettyp")
 		}
@@ -66,10 +67,27 @@ func Validate(widgets []Widget) error {
 		if w.Limit != 0 && w.Limit != 3 && w.Limit != 5 && w.Limit != 10 {
 			return fault.Validation("Ungültiges Widgetlimit")
 		}
+		if w.Window != "" && w.Window != "past" && w.Window != "upcoming" {
+			return fault.Validation("Ungültiger Datumszeitraum")
+		}
 	}
 	return nil
 }
 func Query(ctx context.Context, db *sql.DB, cid string, widgets []Widget) ([]Result, error) {
+	return QueryAt(ctx, db, cid, widgets, Options{Today: time.Now().UTC().Format("2006-01-02")})
+}
+
+// Options carry what relative widgets need: Today is the calendar date in the
+// account's timezone, Shelf the storage-time rules (nil when not set up).
+type Options struct {
+	Today string
+	Shelf *liquids.ShelfRules
+}
+
+// QueryAt resolves relative date windows at query time. A date widget with a
+// window stays current without anyone editing it; a stored from/to range would
+// silently go stale.
+func QueryAt(ctx context.Context, db *sql.DB, cid string, widgets []Widget, o Options) ([]Result, error) {
 	if len(widgets) > 30 {
 		return nil, fault.Validation("Maximal 30 Widgets")
 	}
@@ -83,7 +101,7 @@ func Query(ctx context.Context, db *sql.DB, cid string, widgets []Widget) ([]Res
 	}
 	out := make([]Result, 0, len(widgets))
 	for _, w := range widgets {
-		res, e := queryOne(ctx, db, cid, w, dm)
+		res, e := queryOne(ctx, db, cid, w, dm, o)
 		if e != nil {
 			res = Result{ID: w.ID, Error: e.Error()}
 			if fault.Wrap(e).Status == 500 {
@@ -94,7 +112,7 @@ func Query(ctx context.Context, db *sql.DB, cid string, widgets []Widget) ([]Res
 	}
 	return out, nil
 }
-func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[string]fields.Definition) (Result, error) {
+func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[string]fields.Definition, o Options) (Result, error) {
 	res := Result{ID: w.ID}
 	where := "l.collection_id=? AND l.deleted_at IS NULL"
 	args := []any{cid}
@@ -114,7 +132,7 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 		return res, fault.Validation("Ungültiges Limit")
 	}
 	var d fields.Definition
-	if w.Type != "count" && w.Type != "favorites" && w.Type != "recent" {
+	if w.Type != "count" && w.Type != "favorites" && w.Type != "recent" && w.Type != "expired" && w.Type != "expiring" {
 		var ok bool
 		d, ok = dm[w.FieldID]
 		if !ok || d.Archived {
@@ -122,6 +140,50 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 		}
 	}
 	switch w.Type {
+	case "expired":
+		count := 0
+		res.Count = &count
+		if o.Shelf == nil {
+			return res, nil
+		}
+		expiry, expiryArgs := o.Shelf.ExpirySQL()
+		e := db.QueryRowContext(ctx, "SELECT count(*) FROM liquids l WHERE "+where+" AND "+expiry+"<=?", append(append(args, expiryArgs...), o.Today)...).Scan(&count)
+		return res, e
+	case "expiring":
+		res.Items = []liquids.Liquid{}
+		if o.Shelf == nil {
+			return res, nil
+		}
+		expiry, expiryArgs := o.Shelf.ExpirySQL()
+		queryArgs := append(append([]any{}, args...), expiryArgs...)
+		queryArgs = append(append(queryArgs, expiryArgs...), limit)
+		rows, e := db.QueryContext(ctx, "SELECT l.id FROM liquids l WHERE "+where+" AND "+expiry+" IS NOT NULL ORDER BY "+expiry+" ASC,l.id LIMIT ?", queryArgs...)
+		if e != nil {
+			return res, e
+		}
+		ids := []string{}
+		for rows.Next() {
+			var id string
+			if e = rows.Scan(&id); e != nil {
+				rows.Close()
+				return res, e
+			}
+			ids = append(ids, id)
+		}
+		e = rows.Err()
+		rows.Close()
+		if e != nil {
+			return res, e
+		}
+		for _, id := range ids {
+			l, e := liquids.Get(ctx, db, cid, id)
+			if e != nil {
+				return res, e
+			}
+			res.Items = append(res.Items, l)
+		}
+		o.Shelf.Apply(res.Items)
+		return res, nil
 	case "count", "favorites":
 		if w.Type == "favorites" {
 			where += " AND l.favorite=1"
@@ -159,8 +221,9 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 			return res, nil
 		}
 		if w.Type == "average" {
+			// Nothing rated yet is a normal state, not a broken widget.
 			if count == 0 {
-				return res, fault.Validation("Keine Werte vorhanden")
+				return res, nil
 			}
 			denom := big.NewInt(int64(count))
 			if d.Type == "number" {
@@ -220,17 +283,28 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 			if d.Type != "date" {
 				return res, fault.Validation("Datumsfeld erforderlich")
 			}
-			for _, date := range []string{w.From, w.To} {
-				if _, e := time.Parse("2006-01-02", date); e != nil {
-					return res, fault.Validation("Gültiges Datumsfenster erforderlich")
+			switch w.Window {
+			case "past":
+				where += " AND window_values.field_id=? AND window_values.value_text<=?"
+				args = append(args, d.ID, o.Today)
+				sort = "window_values.value_text DESC,l.id"
+			case "upcoming":
+				where += " AND window_values.field_id=? AND window_values.value_text>=?"
+				args = append(args, d.ID, o.Today)
+				sort = "window_values.value_text ASC,l.id"
+			default:
+				for _, date := range []string{w.From, w.To} {
+					if _, e := time.Parse("2006-01-02", date); e != nil {
+						return res, fault.Validation("Gültiges Datumsfenster erforderlich")
+					}
 				}
+				if w.From > w.To {
+					return res, fault.Validation("Ungültiges Datumsfenster")
+				}
+				where += " AND window_values.field_id=? AND window_values.value_text BETWEEN ? AND ?"
+				args = append(args, d.ID, w.From, w.To)
+				sort = "window_values.value_text ASC,l.id"
 			}
-			if w.From > w.To {
-				return res, fault.Validation("Ungültiges Datumsfenster")
-			}
-			where += " AND window_values.field_id=? AND window_values.value_text BETWEEN ? AND ?"
-			args = append(args, d.ID, w.From, w.To)
-			sort = "window_values.value_text ASC,l.id"
 		}
 		var count int
 		if e := db.QueryRowContext(ctx, "SELECT count(*) FROM "+source+" WHERE "+where, args...).Scan(&count); e != nil {
@@ -265,6 +339,7 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 			}
 			res.Items = append(res.Items, l)
 		}
+		o.Shelf.Apply(res.Items)
 		return res, nil
 	default:
 		return res, fault.Validation("Unbekannter Widgettyp")

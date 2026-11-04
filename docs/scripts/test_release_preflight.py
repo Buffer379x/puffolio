@@ -14,6 +14,7 @@ spec = importlib.util.spec_from_file_location('release_preflight', Path(__file__
 preflight = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preflight)
 
+VERSION = '1.2.3'
 CREDENTIAL = 'credential-DO-NOT-LOG'
 BEARER = 'bearer-DO-NOT-LOG'
 INDEX = json.dumps({'schemaVersion': 2, 'mediaType': 'application/vnd.oci.image.index.v1+json',
@@ -50,6 +51,7 @@ class ReleasePreflight(unittest.TestCase):
     def run_probe(self, replies, **kwargs):
         http = ScriptedHTTP(replies)
         messages = []
+        kwargs.setdefault('reference', VERSION)
         result = preflight.probe_release(http, 'Buffer379x', CREDENTIAL, messages.append, **kwargs)
         return result, http, '\n'.join(messages)
 
@@ -80,9 +82,9 @@ class ReleasePreflight(unittest.TestCase):
 
     def test_existing_git_tag_is_refused_before_registry_authentication(self):
         http = ScriptedHTTP([response(200, {'full_name': 'Buffer379x/puffolio'}),
-                             response(200, {'ref': 'refs/tags/v0.1.0', 'object': {'type': 'commit'}})])
+                             response(200, {'ref': 'refs/tags/v1.2.3', 'object': {'type': 'commit'}})])
         with self.assertRaisesRegex(preflight.PreflightError, 'stage=github-tag status=200 class=existing-tag'):
-            preflight.probe_release(http, 'Buffer379x', CREDENTIAL, lambda _: None)
+            preflight.probe_release(http, 'Buffer379x', CREDENTIAL, lambda _: None, reference=VERSION)
         self.assertEqual(len(http.calls), 2)
 
     def test_denied_rate_and_unexpected_statuses_fail_closed_at_every_stage(self):
@@ -130,8 +132,9 @@ class ReleasePreflight(unittest.TestCase):
                 self.run_probe(replies)
 
     def test_invalid_repository_reference_actor_or_credential_never_reaches_http(self):
-        for kwargs in ({'repository': 'evil.invalid/repo?token=secret'}, {'repository': '../puffolio'},
-                       {'reference': '0.1.0/../../private'}, {'reference': 'latest'}):
+        for kwargs in ({'repository': 'evil.invalid/repo?token=secret', 'reference': VERSION},
+                       {'repository': '../puffolio', 'reference': VERSION}, {'reference': '1.2.3/../../private'},
+                       {'reference': 'latest'}, {'reference': '1.2'}, {'reference': ''}, {'reference': '1.2.3\n'}):
             http = ScriptedHTTP([])
             with self.subTest(kwargs=kwargs), self.assertRaises(preflight.PreflightError):
                 preflight.probe_release(http, 'Buffer379x', CREDENTIAL, lambda _: None, **kwargs)
@@ -139,7 +142,7 @@ class ReleasePreflight(unittest.TestCase):
         for actor, credential in [('user\r\nInjected:yes', CREDENTIAL), ('Buffer379x', ''), ('Buffer379x', CREDENTIAL+'\n')]:
             http = ScriptedHTTP([])
             with self.subTest(actor=actor), self.assertRaises(preflight.PreflightError):
-                preflight.probe_release(http, actor, credential, lambda _: None)
+                preflight.probe_release(http, actor, credential, lambda _: None, reference=VERSION)
             self.assertFalse(http.calls)
 
 
@@ -168,7 +171,7 @@ class TransportAndWorkflow(unittest.TestCase):
                 target = Path(directory) / 'outputs'
                 stdout, stderr = io.StringIO(), io.StringIO()
                 code = preflight.main(ScriptedHTTP(responses(reply)),
-                    {'GITHUB_ACTOR':'Buffer379x','GH_TOKEN':CREDENTIAL,'GITHUB_OUTPUT':str(target)},stdout,stderr)
+                    {'GITHUB_ACTOR':'Buffer379x','GH_TOKEN':CREDENTIAL,'RELEASE_VERSION':VERSION,'GITHUB_OUTPUT':str(target)},stdout,stderr)
                 self.assertEqual(code, 0)
                 self.assertEqual(target.read_text(), expected)
                 for secret in (CREDENTIAL, BEARER):
@@ -177,7 +180,7 @@ class TransportAndWorkflow(unittest.TestCase):
     def test_main_suppresses_secret_payloads_on_unexpected_local_errors(self):
         stdout, stderr = io.StringIO(), io.StringIO()
         fake = ScriptedHTTP([RuntimeError('https://untrusted.invalid/?sig='+CREDENTIAL+BEARER)])
-        self.assertEqual(preflight.main(fake, {'GITHUB_ACTOR':'Buffer379x','GH_TOKEN':CREDENTIAL},stdout,stderr), 1)
+        self.assertEqual(preflight.main(fake, {'GITHUB_ACTOR':'Buffer379x','GH_TOKEN':CREDENTIAL,'RELEASE_VERSION':VERSION},stdout,stderr), 1)
         self.assertEqual(stderr.getvalue(), 'release-preflight stage=internal status=none class=unexpected\n')
         self.assertNotIn(CREDENTIAL, stdout.getvalue()+stderr.getvalue())
 
@@ -191,7 +194,7 @@ class TransportAndWorkflow(unittest.TestCase):
         self.assertIn("if: steps.version.outputs.exists == 'true'", publish)
         self.assertIn("if: steps.version.outputs.exists != 'true'", publish)
         self.assertLess(publish.index('python3 docs/scripts/release-image.py'), publish.index('name: Publish exact version'))
-        self.assertIn('tags: ghcr.io/buffer379x/puffolio:0.1.0', publish)
+        self.assertIn('tags: ghcr.io/buffer379x/puffolio:${{ inputs.version }}', publish)
         self.assertIn('${{ steps.build.outputs.digest || steps.version.outputs.digest }}', publish)
 
 

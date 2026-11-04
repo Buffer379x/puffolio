@@ -276,9 +276,14 @@ func Starter(ctx context.Context, db *sql.DB, cid string) (map[string]string, er
 }
 func StarterTx(ctx context.Context, tx *sql.Tx, cid string) (map[string]string, error) {
 	roles := map[string]string{}
-	defs := []Definition{{Label: "Hersteller", Type: "text", Config: Config{Searchable: true, Filterable: true}}, {Label: "Bewertung", Type: "rating", Config: Config{Stars: 5, Filterable: true}}, {Label: "Bild", Type: "image"}, {Label: "Tags", Type: "tags", Config: Config{Searchable: true, Filterable: true}}, {Label: "Farbe", Type: "color"}, {Label: "Menge", Type: "number", Config: Config{Scale: 1, Unit: "ml", Min: "0", Max: "1000000", Filterable: true}}, {Label: "Nikotin", Type: "number", Config: Config{Scale: 1, Unit: "mg/ml", Min: "0", Max: "100", Filterable: true}}, {Label: "Status", Type: "select", Config: Config{Options: []Option{{ID: store.ID(), Label: "In Gebrauch"}, {ID: store.ID(), Label: "Vorrat"}, {ID: store.ID(), Label: "Aufgebraucht"}}, Filterable: true}}, {Label: "Kaufdatum", Type: "date", Config: Config{Filterable: true}}, {Label: "Notizen", Type: "longtext", Config: Config{Searchable: true}}}
+	defs := []Definition{{Label: "Hersteller", Type: "text", Config: Config{Searchable: true, Filterable: true}}, {Label: "Bewertung", Type: "rating", Config: Config{Stars: 5, Filterable: true}}, {Label: "Bild", Type: "image"}, {Label: "Tags", Type: "tags", Config: Config{Searchable: true, Filterable: true}}, {Label: "Farbe", Type: "color"}, {Label: "Nikotin", Type: "number", Config: Config{Scale: 1, Unit: "mg/ml", Min: "0", Max: "100", Filterable: true}}, {Label: "Status", Type: "select", Config: Config{Options: []Option{{ID: store.ID(), Label: "In Gebrauch"}, {ID: store.ID(), Label: "Vorrat"}, {ID: store.ID(), Label: "Aufgebraucht"}}, Filterable: true}}, {Label: "Kaufdatum", Type: "date", Config: Config{Filterable: true}}, {Label: "Eigene Haltedauer", Type: "number", Config: Config{Unit: "Monate", Min: "1", Max: "1200"}}, {Label: "Notizen", Type: "longtext", Config: Config{Searchable: true}}}
 	for _, d := range defs {
-		d.Visibility = Visibility{Form: true, Detail: true, List: d.Type != "longtext", Grid: d.Type == "rating" || d.Type == "image" || d.Type == "tags" || d.Type == "color"}
+		// Starter views stay readable without horizontal scrolling. Everything else
+		// is one click away in "Ansicht" and always visible in the detail view.
+		override := d.Label == "Eigene Haltedauer"
+		list := d.Label != "Notizen" && d.Label != "Farbe" && d.Label != "Kaufdatum" && !override
+		grid := list && d.Label != "Status"
+		d.Visibility = Visibility{Form: true, Detail: !override, List: list, Grid: grid}
 		saved, e := SaveTx(ctx, tx, cid, d, true)
 		if e != nil {
 			return nil, fmt.Errorf("starter fields: %w", e)
@@ -290,8 +295,12 @@ func StarterTx(ctx context.Context, tx *sql.Tx, cid string) (map[string]string, 
 			roles["rating"] = saved.ID
 		case "Farbe":
 			roles["color"] = saved.ID
-		case "Menge":
-			roles["quantity"] = saved.ID
+		case "Kaufdatum":
+			roles["purchase"] = saved.ID
+		case "Eigene Haltedauer":
+			roles["shelfOverride"] = saved.ID
+		case "Status":
+			roles["status"] = saved.ID
 		}
 	}
 	return roles, nil

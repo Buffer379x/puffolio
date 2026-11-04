@@ -116,9 +116,10 @@ def check_media(client, media):
         if variant == 'master':
             assert (width, height) == (1600, 1067)
         else:
-            assert width * 3 == height * 4
+            assert width == height
             assert max(width, height) <= (480 if variant == 'thumbnail' else 1600)
-        anonymous.request(media[key], status=401)
+        # Visitors read the published crop; the uncropped master stays private.
+        anonymous.request(media[key], status=401 if variant == 'master' else 200)
 
 
 def check_saved_state(client, saved):
@@ -181,7 +182,7 @@ def exercise(origin, saved):
     return {'status': 'PASS', 'uploads': 5, 'realMixedLogins': 2,
             'sourceDimensions': [6000, 4000], 'sourceBitDepth': 16,
             'checks': ['repeated-24mp', 'two-uploads-two-logins', 'adam7-24mp',
-                       'private-jpeg-variants', 'readiness', 'saved-state-preserved']}
+                       'square-jpeg-variants-private-master', 'readiness', 'saved-state-preserved']}
 
 
 def main():

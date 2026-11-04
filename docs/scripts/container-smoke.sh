@@ -11,10 +11,10 @@ cleanup() {
   sudo rm -rf "$qa_dir"
 }
 trap cleanup EXIT
-mkdir -p "$qa_dir/data" "$qa_dir/restored" "$qa_dir/fixtures"
+mkdir -p "$qa_dir/data" "$qa_dir/restored" "$qa_dir/fixtures" "$qa_dir/upgrade"
 sudo python3 docs/scripts/startup-fixtures.py prepare "$qa_dir/fixtures"
 sudo chown -R 99:100 "$qa_dir"
-sudo chmod 700 "$qa_dir" "$qa_dir/data" "$qa_dir/restored"
+sudo chmod 700 "$qa_dir" "$qa_dir/data" "$qa_dir/restored" "$qa_dir/upgrade"
 sudo chmod 500 "$qa_dir/fixtures/denied"
 runtime=(--platform "$platform" --user 99:100 --read-only --cap-drop ALL
   --security-opt no-new-privileges --cpus 2 --memory 512m --memory-swap 512m
@@ -31,7 +31,6 @@ start() {
   containers+=("$container")
   docker run --detach --name "$container" "${runtime[@]}" \
     --publish 127.0.0.1:8788:8080 \
-    --env PUFFOLIO_BASE_URL=http://127.0.0.1:8788 \
     --mount "type=bind,src=$1,dst=/data" "$image" >/dev/null
   wait_healthy
 }
@@ -78,8 +77,21 @@ docker run --rm --name "$restore_container" "${runtime[@]}" \
 start "$qa_dir/restored"
 sudo python3 docs/scripts/smoke.py --url http://127.0.0.1:8788 --verify-state "$qa_dir/state.json"
 stop_cleanly
-# There is no previous public Puffolio release. These are synthetic migration/startup
-# fixtures, not a claim of a real earlier-version upgrade or binary rollback.
+# Real upgrade: data written by the previous published image, read by this one.
+previous='ghcr.io/buffer379x/puffolio@sha256:e4f9d8a2ab11e5e853670da5a0b7609474ef6428ffe9549e440e3d37f37f722d'
+containers+=("$container")
+docker run --detach --name "$container" "${runtime[@]}" \
+  --publish 127.0.0.1:8788:8080 --env PUFFOLIO_BASE_URL=http://127.0.0.1:8788 \
+  --mount "type=bind,src=$qa_dir/upgrade,dst=/data" "$previous" >/dev/null
+wait_healthy
+sudo python3 docs/scripts/upgrade-smoke.py seed --url http://127.0.0.1:8788 \
+  --setup-code-file "$qa_dir/upgrade/setup-code" --state-file "$qa_dir/upgrade-state.json"
+stop_cleanly
+start "$qa_dir/upgrade"
+sudo python3 docs/scripts/upgrade-smoke.py verify --url http://127.0.0.1:8788 \
+  --state-file "$qa_dir/upgrade-state.json"
+stop_cleanly
+# Synthetic startup fixtures: schema states a published image cannot produce on demand.
 start "$qa_dir/fixtures/initial"
 stop_cleanly
 start "$qa_dir/fixtures/current"

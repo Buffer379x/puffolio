@@ -14,26 +14,120 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' }) {
   return <button type="button" {...p} className={`button ${variant} ${className}`} />;
 }
-const paths: Record<string, string> = {
-  dashboard: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
-  liquids: 'M12 2C10 6 5 10 5 15a7 7 0 0014 0c0-5-5-9-7-13Z',
-  tools: 'm14 6 4-4 4 4-4 4 M16 8 3 21 M3 3l6 6 M2 6l4-4 M18 15l4 4-3 3-4-4',
-  settings:
-    'M12 8a4 4 0 100 8 4 4 0 000-8 M12 2v3 M12 19v3 M2 12h3 M19 12h3 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2',
-  admin: 'M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6Z',
-  menu: 'M3 6h18 M3 12h18 M3 18h18',
-  close: 'm6 6 12 12 M18 6 6 18',
-  star: 'm12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z',
-  edit: 'm4 16 12-12 4 4L8 20H4Z',
-  plus: 'M12 4v16 M4 12h16',
-  help: 'M9 8a3 3 0 116 0c0 3-3 2-3 6 M12 18v1',
-  arrow: 'M5 12h14 M13 6l6 6-6 6',
-  trash: 'M3 6h18 M9 6V3h6v3 M6 6l1 15h10l1-15 M10 10v7 M14 10v7',
-  sun: 'M12 7a5 5 0 100 10 5 5 0 000-10 M12 1v3 M12 20v3 M1 12h3 M20 12h3',
-  moon: 'M21 13A9 9 0 0111 3a9 9 0 1010 10Z',
-  system: 'M3 3h18v14H3Z M8 21h8 M12 17v4',
-  image: 'M3 3h18v18H3Z m0 14 6-6 4 4 3-3 5 5 M15 7h1',
-  logout: 'M9 3H3v18h6 M8 12h13 M17 8l4 4-4 4',
+/** One icon set for the whole app; every glyph is drawn on the same 24px grid. */
+const icons: Record<string, ReactNode> = {
+  dashboard: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="11" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="18" width="7" height="3" rx="1" />
+    </>
+  ),
+  liquids: (
+    <>
+      <path d="M12 3c-2 4-7 8-7 12a7 7 0 0 0 14 0c0-4-5-8-7-12Z" />
+      <path d="M9 16a3 3 0 0 0 3 3" />
+    </>
+  ),
+  tools: (
+    <>
+      <path d="M4 7h7m6 0h3M4 17h3m6 0h7" />
+      <circle cx="14" cy="7" r="3" />
+      <circle cx="10" cy="17" r="3" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+    </>
+  ),
+  admin: <path d="M12 3 4 6v6c0 5 4 8 8 9 4-1 8-4 8-9V6Z" />,
+  menu: <path d="M4 6h16M4 12h16M4 18h16" />,
+  close: <path d="m6 6 12 12M6 18 18 6" />,
+  star: <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" />,
+  heart: <path d="m12 21-8-8a5.5 5.5 0 0 1 8-7.5 5.5 5.5 0 0 1 8 7.5Z" />,
+  edit: <path d="m16 3 5 5-13 13H3v-5Zm-2 2 5 5" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9a2.5 2.5 0 1 1 4.5 1.5c-1 1-2 1-2 3M12 17h.01" />
+    </>
+  ),
+  arrow: <path d="M5 12h14m-5-5 5 5-5 5" />,
+  up: <path d="m6 15 6-6 6 6" />,
+  down: <path d="m6 9 6 6 6-6" />,
+  sortAsc: <path d="M12 19V5m-6 6 6-6 6 6" />,
+  sortDesc: <path d="M12 5v14m-6-6 6 6 6-6" />,
+  trash: <path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7" />,
+  archive: <path d="M3 4h18v4H3ZM5 8v12h14V8M10 12h4" />,
+  restore: <path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1 1m12 12 1 1M5 19l1-1M18 6l1-1" />
+    </>
+  ),
+  moon: <path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z" />,
+  system: (
+    <>
+      <rect x="3" y="3" width="18" height="13" rx="2" />
+      <path d="M12 16v5m-5 0h10" />
+    </>
+  ),
+  image: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8" cy="8" r="2" />
+      <path d="m3 17 5-5 4 4 4-7 5 8" />
+    </>
+  ),
+  logout: <path d="M9 3H4v18h5M9 12h12m-4-4 4 4-4 4" />,
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
+    </>
+  ),
+  filter: <path d="M3 5h18l-7 8v6l-4 2v-8Z" />,
+  sliders: (
+    <>
+      <path d="M4 7h7m6 0h3M4 17h3m6 0h7" />
+      <circle cx="14" cy="7" r="3" />
+      <circle cx="10" cy="17" r="3" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1" />
+      <rect x="14" y="3" width="7" height="7" rx="1" />
+      <rect x="3" y="14" width="7" height="7" rx="1" />
+      <rect x="14" y="14" width="7" height="7" rx="1" />
+    </>
+  ),
+  list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  box: <path d="m3 7 9-4 9 4v10l-9 4-9-4Zm0 0 9 4 9-4m-9 4v10" />,
+  calendar: (
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M7 3v4m10-4v4M3 11h18" />
+    </>
+  ),
+  check: <path d="m5 12 4 4L19 6" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  tag: (
+    <>
+      <path d="M3 3h8l10 10-8 8L3 11Z" />
+      <circle cx="7.5" cy="7.5" r="1" />
+    </>
+  ),
 };
 export function Icon({ name }: { name: string }) {
   return (
@@ -44,13 +138,25 @@ export function Icon({ name }: { name: string }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.7"
+      strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d={paths[name] || paths.liquids} />
+      {icons[name] || icons.liquids}
     </svg>
+  );
+}
+/** Read-only rating. "Unrated" renders as a dash so it never reads as zero stars. */
+export function Stars({ value, max = 5 }: { value: number; max?: number }) {
+  return (
+    <span className="stars" role="img" aria-label={`${value} von ${max}`}>
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} className={i < value ? 'star on' : 'star'}>
+          <Icon name="star" />
+        </span>
+      ))}
+    </span>
   );
 }
 export function IconButton({
@@ -91,11 +197,13 @@ export function PageHeader({
 }
 export function Panel({
   title,
+  subtitle,
   actions,
   children,
   className = '',
 }: {
   title?: string;
+  subtitle?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -104,7 +212,10 @@ export function Panel({
     <section className={'panel ' + className}>
       {title && (
         <header className="panel-head">
-          <h2>{title}</h2>
+          <div className="panel-title">
+            <h2>{title}</h2>
+            {subtitle && <p className="panel-subtitle">{subtitle}</p>}
+          </div>
           {actions}
         </header>
       )}
@@ -198,7 +309,7 @@ export function SegmentedControl<T extends string>({
   label,
 }: {
   value: T;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; icon?: string }[];
   onChange: (v: T) => void;
   label: string;
 }) {
@@ -209,9 +320,11 @@ export function SegmentedControl<T extends string>({
           type="button"
           key={o.value}
           aria-pressed={value === o.value}
+          aria-label={o.icon ? o.label : undefined}
+          title={o.icon ? o.label : undefined}
           onClick={() => onChange(o.value)}
         >
-          {o.label}
+          {o.icon ? <Icon name={o.icon} /> : o.label}
         </button>
       ))}
     </div>

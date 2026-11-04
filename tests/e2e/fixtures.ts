@@ -188,13 +188,11 @@ export async function goto(app: App, route: string) {
         ? 'Liquids'
         : route.startsWith('/settings')
           ? 'Einstellungen'
-          : route.startsWith('/admin')
-            ? 'Verwaltung'
-            : route.startsWith('/tools/nicotine')
-              ? 'Nikotinrechner'
-              : route.startsWith('/tools')
-                ? 'Tools'
-                : 'Dashboard',
+          : route.startsWith('/tools/nicotine')
+            ? 'Nikotinrechner'
+            : route.startsWith('/tools')
+              ? 'Tools'
+              : 'Dashboard',
       exact: true,
     }),
   ).toBeVisible();

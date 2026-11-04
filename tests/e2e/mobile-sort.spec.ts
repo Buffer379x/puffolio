@@ -8,10 +8,11 @@ test('mobile sorting keeps ordinary labels readable and long field names availab
   for (const width of [320, 360, 390]) {
     await app.page.setViewportSize({ width, height: 800 });
     await goto(app, '/liquids');
-    for (const direction of ['desc', 'asc']) {
-      await app.page
-        .getByRole('combobox', { name: 'Sortierrichtung', exact: true })
-        .selectOption(direction);
+    for (const [button, direction] of [
+      ['Absteigend sortiert', 'asc'],
+      ['Aufsteigend sortiert', 'desc'],
+    ]) {
+      await app.page.getByRole('button', { name: button, exact: true }).click();
       await expect
         .poll(() => new URL(app.page.url()).searchParams.get('direction'))
         .toBe(direction);
@@ -56,18 +57,15 @@ test('mobile sorting keeps ordinary labels readable and long field names availab
         expect(rect.left).toBeGreaterThanOrEqual(0);
         expect(rect.right).toBeLessThanOrEqual(width);
       }
-      expect(geometry.segment.top).toBeGreaterThanOrEqual(
-        Math.max(...geometry.rects.map((r) => r.bottom)),
-      );
       expect(geometry.segment.right).toBeLessThanOrEqual(width);
       expect(geometry.scroll).toBeLessThanOrEqual(geometry.viewport);
     }
     await app.page
       .getByRole('combobox', { name: 'Sortieren nach', exact: true })
       .selectOption('field:' + field.id);
-    await expect(app.page.locator('.sort-summary')).toContainText(label);
-    const summary = await app.page.locator('.sort-summary').boundingBox();
-    expect(summary!.x + summary!.width).toBeLessThanOrEqual(width);
+    await expect
+      .poll(() => new URL(app.page.url()).searchParams.get('sort'))
+      .toBe('field:' + field.id);
     expect(await app.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

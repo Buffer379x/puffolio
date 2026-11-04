@@ -16,6 +16,7 @@ test('duplicate date widgets save as whole layout and persist across reload; can
     await d.getByLabel('Widgettyp').selectOption('dates');
     await d.getByLabel('Widgettitel').fill(title);
     await d.getByLabel('Widgetfeld').selectOption(field.id);
+    await d.getByLabel('Widgetzeitraum').selectOption('custom');
     await d.getByLabel('Widget von').fill('2026-01-01');
     await d.getByLabel('Widget bis').fill('2028-12-31');
     await d.getByRole('button', { name: 'Übernehmen', exact: true }).click();
@@ -26,7 +27,8 @@ test('duplicate date widgets save as whole layout and persist across reload; can
     app.page.getByRole('button', { name: 'Dashboard anpassen', exact: true }),
   ).toBeVisible();
   const saved = await (await app.api.get('/api/v1/dashboard')).json();
-  expect(saved.widgets.filter((w: any) => w.type === 'dates')).toHaveLength(2);
+  const dates = (widgets: any[]) => widgets.filter((w) => w.type === 'dates').length;
+  expect(dates(saved.widgets)).toBe(dates(before) + 2);
   expect(saved.widgets.length).toBe(before.length + 2);
   await app.page.reload();
   await expect(app.page.getByRole('heading', { name: 'Erste Termine', exact: true })).toBeVisible();
@@ -39,7 +41,7 @@ test('duplicate date widgets save as whole layout and persist across reload; can
   await app.page.getByRole('button', { name: 'Bestätigen', exact: true }).click();
   expect((await (await app.api.get('/api/v1/dashboard')).json()).widgets).toEqual(saved.widgets);
 });
-test('tool contains only image/title and calculator invalidates old results for unit changes', async ({
+test('tool contains only image/title and calculator invalidates old results on any change', async ({
   app,
 }) => {
   await goto(app, '/tools');
@@ -52,11 +54,13 @@ test('tool contains only image/title and calculator invalidates old results for 
   await app.page.getByLabel('Nikotinshots', { exact: true }).fill('20');
   await app.page.getByLabel('Stärke der Shots', { exact: true }).fill('20');
   await app.page.getByRole('button', { name: 'Berechnen', exact: true }).click();
-  await expect(app.page.getByText('0,003 mg/ml', { exact: true })).toBeVisible();
-  await app.page.getByLabel('Einheit der Shotstärke').selectOption('mg/ml');
-  await expect(app.page.getByText('0,003 mg/ml', { exact: true })).not.toBeVisible();
-  await app.page.getByRole('button', { name: 'Berechnen', exact: true }).click();
   await expect(app.page.getByText('3,333 mg/ml', { exact: true })).toBeVisible();
+  await expect(app.page.getByLabel('Einheit der Shotstärke')).toHaveCount(0);
+  await expect(app.page.getByText(/mg\/l\b/)).toHaveCount(0);
+  await app.page.getByLabel('Stärke der Shots', { exact: true }).fill('18');
+  await expect(app.page.getByText('3,333 mg/ml', { exact: true })).not.toBeVisible();
+  await app.page.getByRole('button', { name: 'Berechnen', exact: true }).click();
+  await expect(app.page.getByText('3,000 mg/ml', { exact: true })).toBeVisible();
   await app.page.getByLabel('Nikotinshots', { exact: true }).fill('110');
   await app.page.getByRole('button', { name: 'Berechnen', exact: true }).click();
   await expect(app.page.getByText('0,000 ml', { exact: true })).toBeVisible();

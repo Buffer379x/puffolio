@@ -134,66 +134,13 @@ func (a *Service) Session(ctx context.Context, token string) (User, error) {
 	_, e = a.Store.DB.ExecContext(ctx, "UPDATE sessions SET last_used=? WHERE token_hash=? AND last_used<?", now, Hash(token), now-60)
 	return u, e
 }
-func (a *Service) Invite(ctx context.Context, username, display, role string) (User, string, error) {
-	if e := validUser(username, display, role); e != nil {
-		return User{}, "", e
-	}
-	tx, e := a.Store.DB.BeginTx(ctx, nil)
-	if e != nil {
-		return User{}, "", e
-	}
-	defer tx.Rollback()
-	u, e := createUser(ctx, tx, username, display, role, "invitation-pending")
-	if e != nil {
-		return User{}, "", e
-	}
-	token := store.Token(32)
-	_, e = tx.ExecContext(ctx, "INSERT INTO one_time_tokens(token_hash,user_id,purpose,expires_at) VALUES(?,?,'invite',?)", Hash(token), u.ID, time.Now().Add(24*time.Hour).Unix())
-	if e != nil {
-		return User{}, "", e
-	}
-	return u, token, tx.Commit()
-}
-func (a *Service) ConsumeInvitation(ctx context.Context, token, password, display string) (User, error) {
-	return a.ConsumeInvitationInitialized(ctx, token, password, display, nil)
-}
-func (a *Service) ConsumeInvitationInitialized(ctx context.Context, token, password, display string, init func(context.Context, *sql.Tx, User) error) (User, error) {
-	hash, e := HashPassword(password)
-	if e != nil {
-		return User{}, e
-	}
-	tx, e := a.Store.DB.BeginTx(ctx, nil)
-	if e != nil {
-		return User{}, e
-	}
-	defer tx.Rollback()
+
+// Owner is the account whose collection anonymous visitors see: the administrator
+// created at setup.
+func (a *Service) Owner(ctx context.Context) (User, error) {
 	var u User
-	e = tx.QueryRowContext(ctx, "SELECT u.id,u.username,u.display_name,u.role,u.version,u.disabled,c.id FROM one_time_tokens t JOIN users u ON u.id=t.user_id JOIN collections c ON c.user_id=u.id WHERE t.token_hash=? AND t.purpose='invite' AND t.expires_at>? AND u.disabled=0", Hash(token), time.Now().Unix()).Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.Version, &u.Disabled, &u.CollectionID)
-	if e != nil {
-		return User{}, fmt.Errorf("Einladung ungültig oder abgelaufen")
-	}
-	if display != "" {
-		if utf8.RuneCountInString(display) > 100 {
-			return User{}, fmt.Errorf("Anzeigename zu lang")
-		}
-		u.DisplayName = strings.TrimSpace(display)
-	}
-	if _, e = tx.ExecContext(ctx, "UPDATE users SET password_hash=?,display_name=?,version=version+1 WHERE id=?", hash, u.DisplayName, u.ID); e != nil {
-		return User{}, e
-	}
-	u.Version++
-	if _, e = tx.ExecContext(ctx, "DELETE FROM one_time_tokens WHERE token_hash=?", Hash(token)); e != nil {
-		return User{}, e
-	}
-	if init != nil {
-		if e = init(ctx, tx, u); e != nil {
-			return User{}, e
-		}
-	}
-	if e = InitializeUserTx(ctx, tx, u, map[string]string{}); e != nil {
-		return User{}, e
-	}
-	return u, tx.Commit()
+	e := a.Store.DB.QueryRowContext(ctx, "SELECT u.id,u.username,u.display_name,u.role,u.version,u.disabled,c.id FROM users u JOIN collections c ON c.user_id=u.id WHERE u.role='admin' AND u.disabled=0 ORDER BY u.created_at,u.id LIMIT 1").Scan(&u.ID, &u.Username, &u.DisplayName, &u.Role, &u.Version, &u.Disabled, &u.CollectionID)
+	return u, e
 }
 func (a *Service) ResetPassword(ctx context.Context, username, password string) error {
 	hash, e := HashPassword(password)

@@ -23,6 +23,7 @@ type Query struct {
 	Favorite, Trash         bool
 	Page, PageSize          int
 	Filters                 *Filter
+	Shelf                   *ShelfRules
 }
 type Page struct {
 	Items    []Liquid `json:"items"`
@@ -87,13 +88,18 @@ func List(ctx context.Context, db *sql.DB, cid string, q Query) (Page, error) {
 	orderArgs := []any{}
 	switch sort {
 	case "name":
-		expr = "l.normalized_name"
+		expr = germanSort("l.normalized_name")
 	case "createdAt":
 		expr = "l.created_at"
 	case "updatedAt":
 		expr = "l.updated_at"
 	case "favorite":
 		expr = "l.favorite"
+	case "shelf":
+		expr = "NULL"
+		if q.Shelf != nil {
+			expr, orderArgs = q.Shelf.RemainingSQL()
+		}
 	default:
 		if !strings.HasPrefix(sort, "field:") {
 			return p, fault.Validation("Ungültige Sortierung")
@@ -107,7 +113,9 @@ func List(ctx context.Context, db *sql.DB, cid string, q Query) (Page, error) {
 		switch d.Type {
 		case "number", "rating":
 			column = "value_number"
-		case "text", "date":
+		case "text":
+			column = "value_search"
+		case "date":
 			column = "value_text"
 		case "boolean":
 			column = "value_bool"
@@ -115,6 +123,9 @@ func List(ctx context.Context, db *sql.DB, cid string, q Query) (Page, error) {
 			return p, fault.Validation("Feldtyp nicht sortierbar")
 		}
 		expr = "(SELECT " + column + " FROM field_values ov WHERE ov.collection_id=l.collection_id AND ov.liquid_id=l.id AND ov.field_id=?)"
+		if d.Type == "text" {
+			expr = germanSort(expr)
+		}
 		orderArgs = append(orderArgs, fid)
 	}
 	direction := strings.ToUpper(q.Direction)
@@ -156,6 +167,7 @@ func List(ctx context.Context, db *sql.DB, cid string, q Query) (Page, error) {
 		}
 		p.Items = append(p.Items, l)
 	}
+	q.Shelf.Apply(p.Items)
 	return p, nil
 }
 func BuildFilter(f Filter, defs map[string]fields.Definition) (string, []any, error) {
@@ -362,4 +374,13 @@ func ValidateFilterShape(f Filter) error {
 		}
 	}
 	return walk(f, 1)
+}
+
+// germanSort orders umlauts beside their base letter. Case-folded text compares
+// by code point, which would otherwise file "Äpfel" after "Zitrone".
+func germanSort(column string) string {
+	for _, pair := range [][2]string{{"ä", "a"}, {"ö", "o"}, {"ü", "u"}, {"ß", "ss"}} {
+		column = "replace(" + column + ",'" + pair[0] + "','" + pair[1] + "')"
+	}
+	return column
 }

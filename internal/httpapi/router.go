@@ -48,6 +48,9 @@ type attempt struct {
 type principal struct {
 	User  auth.User
 	Token string
+	// Visitor marks an anonymous reader. User is then the collection's owner, so
+	// read handlers need no special case; anything private must check this flag.
+	Visitor bool
 }
 type contextKey int
 
@@ -75,45 +78,41 @@ func (s *server) routes() {
 	m.HandleFunc("GET /api/v1/setup/status", s.setupStatus)
 	m.HandleFunc("POST /api/v1/setup", s.setup)
 	m.HandleFunc("POST /api/v1/auth/login", s.login)
-	m.HandleFunc("POST /api/v1/auth/invite", s.consumeInvite)
 	s.handle("GET /api/v1/me", s.me)
 	s.handle("PATCH /api/v1/me", s.profile)
 	s.handle("POST /api/v1/auth/logout", s.logout)
 	s.handle("POST /api/v1/auth/password", s.password)
-	s.handle("GET /api/v1/fields", s.listFields)
+	s.public("GET /api/v1/fields", s.listFields)
 	s.handle("POST /api/v1/fields", s.createField)
 	s.handle("PATCH /api/v1/fields/{id}", s.updateField)
 	s.handle("DELETE /api/v1/fields/{id}", s.deleteField)
 	s.handle("POST /api/v1/fields/{id}/archive", s.archiveField)
 	s.handle("PUT /api/v1/fields/order", s.orderFields)
 	s.handle("GET /api/v1/fields/{id}/usage", s.fieldUsage)
-	s.handle("GET /api/v1/fields/{id}/tags", s.listTags)
+	s.public("GET /api/v1/fields/{id}/tags", s.listTags)
 	s.handle("POST /api/v1/fields/{id}/tags", s.createTag)
 	s.handle("PATCH /api/v1/fields/{id}/tags/{tagId}", s.updateTag)
-	s.handle("GET /api/v1/liquids", s.listLiquids)
+	s.public("GET /api/v1/liquids", s.listLiquids)
 	s.handle("POST /api/v1/liquids", s.createLiquid)
-	s.handle("GET /api/v1/liquids/{id}", s.getLiquid)
+	s.public("GET /api/v1/liquids/{id}", s.getLiquid)
 	s.handle("PATCH /api/v1/liquids/{id}", s.updateLiquid)
 	s.handle("DELETE /api/v1/liquids/{id}", s.trashLiquid)
 	s.handle("POST /api/v1/liquids/{id}/restore", s.restoreLiquid)
 	s.handle("POST /api/v1/liquids/bulk", s.bulkLiquids)
-	s.handle("GET /api/v1/preferences", s.getPreferences)
+	s.public("GET /api/v1/preferences", s.getPreferences)
 	s.handle("PUT /api/v1/preferences", s.putPreferences)
-	s.handle("GET /api/v1/dashboard", s.getDashboard)
+	s.public("GET /api/v1/dashboard", s.getDashboard)
 	s.handle("PUT /api/v1/dashboard", s.putDashboard)
-	s.handle("POST /api/v1/dashboard/query", s.queryDashboard)
+	s.public("POST /api/v1/dashboard/query", s.queryDashboard)
 	s.handle("GET /api/v1/saved-views", s.listViews)
 	s.handle("POST /api/v1/saved-views", s.createView)
 	s.handle("PATCH /api/v1/saved-views/{id}", s.updateView)
 	s.handle("DELETE /api/v1/saved-views/{id}", s.deleteView)
 	s.handle("POST /api/v1/media", s.uploadMedia)
-	s.handle("GET /api/v1/media/{id}", s.getMedia)
+	s.public("GET /api/v1/media/{id}", s.getMedia)
 	s.handle("GET /api/v1/media/{id}/info", s.mediaInfo)
 	s.handle("POST /api/v1/media/{id}/crop", s.cropMedia)
 	s.handle("DELETE /api/v1/media/{id}", s.deleteMedia)
-	s.handle("GET /api/v1/admin/users", s.adminUsers)
-	s.handle("POST /api/v1/admin/users", s.adminInvite)
-	s.handle("PATCH /api/v1/admin/users/{id}", s.adminUpdate)
 	s.handle("GET /api/v1/admin/system", s.system)
 	s.handle("POST /api/v1/admin/backups", s.backup)
 	s.handle("POST /api/v1/exports", s.export)
@@ -137,21 +136,54 @@ func (s *server) middleware(next http.Handler) http.Handler {
 		}()
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
 			if !s.validOrigin(r) {
-				respondError(w, fault.New(403, "origin_rejected", "Herkunft nicht erlaubt"))
+				respondError(w, fault.New(403, "origin_rejected", "Herkunft nicht erlaubt. PUFFOLIO_BASE_URL muss der aufgerufenen Adresse entsprechen oder leer sein."))
 				return
 			}
 			// Public authentication parses/admit requests in its handler before
 			// acquiring the same writer boundary. Never buffer import bodies here.
-			publicAuth := r.Method == "POST" && (r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/invite" || r.URL.Path == "/api/v1/setup")
-			if !publicAuth {
+			publicAuth := r.Method == "POST" && (r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/setup")
+			if !publicAuth && !runsOutsideWriter(r) {
 				if e := s.Store.Writer.LockContext(r.Context()); e != nil {
 					return
 				}
-				defer s.Store.Writer.Unlock()
+				hold := &writerHold{lock: &s.Store.Writer}
+				defer hold.release()
+				r = r.WithContext(context.WithValue(r.Context(), writerHoldKey, hold))
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// runsOutsideWriter lists POST routes that read, or that read a slow request
+// body and do expensive work first. Holding the instance-wide writer for those
+// would let one upload on a slow connection stall every other user's save.
+// Media takes the writer itself for the final publish step.
+func runsOutsideWriter(r *http.Request) bool {
+	if r.Method != "POST" {
+		return false
+	}
+	path := r.URL.Path
+	return path == "/api/v1/media" || path == "/api/v1/dashboard/query" || path == "/api/v1/imports/preview" ||
+		(strings.HasPrefix(path, "/api/v1/media/") && strings.HasSuffix(path, "/crop"))
+}
+
+type writerHoldContextKey struct{}
+
+var writerHoldKey = writerHoldContextKey{}
+
+// writerHold lets a handler give up the writer before a response that no longer
+// depends on it, such as streaming a finished archive to a slow client.
+type writerHold struct {
+	once sync.Once
+	lock *store.WriterLock
+}
+
+func (h *writerHold) release() { h.once.Do(h.lock.Unlock) }
+func releaseWriter(r *http.Request) {
+	if h, ok := r.Context().Value(writerHoldKey).(*writerHold); ok {
+		h.release()
+	}
 }
 func (s *server) validOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
@@ -165,29 +197,49 @@ func (s *server) validOrigin(r *http.Request) bool {
 	if s.Config.PublicURL != "" {
 		return origin == strings.TrimRight(s.Config.PublicURL, "/")
 	}
-	scheme := "http"
-	if s.Config.SecureCookie {
-		scheme = "https"
-	}
-	return u.Scheme == scheme && u.Host == r.Host
+	// Without an explicit base URL the browser's Origin must name the host it
+	// sent the request to. The scheme is not compared: a TLS-terminating proxy
+	// forwards plain HTTP, and the session cookie is host-scoped either way.
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host == r.Host
 }
+
+// handle registers a route for the signed-in administrator.
 func (s *server) handle(pattern string, h func(http.ResponseWriter, *http.Request) error) {
+	s.route(pattern, h, false)
+}
+
+// public registers a read route that also serves anonymous visitors. Puffolio has
+// one owner who maintains the collection; everyone else may look at it.
+func (s *server) public(pattern string, h func(http.ResponseWriter, *http.Request) error) {
+	s.route(pattern, h, true)
+}
+func (s *server) route(pattern string, h func(http.ResponseWriter, *http.Request) error, public bool) {
 	s.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		p := principal{}
+		var u auth.User
 		cookie, e := r.Cookie("puffolio_session")
-		if e != nil {
-			respondError(w, fault.New(401, "unauthorized", "Anmeldung erforderlich"))
-			return
+		if e == nil {
+			u, e = s.auth.Session(r.Context(), cookie.Value)
 		}
-		u, e := s.auth.Session(r.Context(), cookie.Value)
-		if e != nil {
-			respondError(w, fault.New(401, "unauthorized", "Anmeldung erforderlich"))
-			return
+		if e == nil {
+			p = principal{User: u, Token: cookie.Value}
+			if r.Method != "GET" && r.Method != "HEAD" && !auth.Equal(r.Header.Get("X-CSRF-Token"), auth.CSRF(cookie.Value)) {
+				respondError(w, fault.New(403, "csrf_rejected", "Sicherheitsprüfung fehlgeschlagen"))
+				return
+			}
+		} else {
+			if !public {
+				respondError(w, fault.New(401, "unauthorized", "Anmeldung erforderlich"))
+				return
+			}
+			owner, e := s.auth.Owner(r.Context())
+			if e != nil {
+				respondError(w, fault.New(401, "unauthorized", "Anmeldung erforderlich"))
+				return
+			}
+			p = principal{User: owner, Visitor: true}
 		}
-		if r.Method != "GET" && r.Method != "HEAD" && !auth.Equal(r.Header.Get("X-CSRF-Token"), auth.CSRF(cookie.Value)) {
-			respondError(w, fault.New(403, "csrf_rejected", "Sicherheitsprüfung fehlgeschlagen"))
-			return
-		}
-		r = r.WithContext(context.WithValue(r.Context(), principalKey, principal{User: u, Token: cookie.Value}))
+		r = r.WithContext(context.WithValue(r.Context(), principalKey, p))
 		if e = h(w, r); e != nil {
 			if fault.Wrap(e).Status == 500 {
 				slog.Error("request failed", "requestId", w.Header().Get("X-Request-Id"), "error", e.Error())

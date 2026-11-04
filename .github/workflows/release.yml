@@ -1,13 +1,11 @@
-name: Release 0.1.0
+name: Release
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version
-        type: choice
+        description: Version, must equal the VERSION file
+        type: string
         required: true
-        default: '0.1.0'
-        options: ['0.1.0']
       source_sha:
         description: Exact reviewed main commit (40 hex characters)
         type: string
@@ -15,7 +13,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: puffolio-release-0.1.0
+  group: puffolio-release
   cancel-in-progress: false
 jobs:
   validate:
@@ -31,10 +29,10 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           test "$GITHUB_REF" = refs/heads/main
-          test "$RELEASE_VERSION" = 0.1.0
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$SOURCE_SHA" = "$GITHUB_SHA"
-          test "$(cat VERSION)" = "$RELEASE_VERSION"
+          python3 docs/scripts/check-version.py "$RELEASE_VERSION"
   checks:
     needs: validate
     uses: ./.github/workflows/ci.yml
@@ -67,14 +65,16 @@ jobs:
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: python3 docs/scripts/release-preflight.py
       - name: Validate existing immutable image before resuming
         if: steps.version.outputs.exists == 'true'
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
           EXISTING_DIGEST: ${{ steps.version.outputs.digest }}
         run: |
-          python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio \
+          python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio --version "$RELEASE_VERSION" \
             --source-sha "$SOURCE_SHA" --expected-digest "$EXISTING_DIGEST" --output work/release/index.json
       - name: Publish exact version and build attestations
         if: steps.version.outputs.exists != 'true'
@@ -84,8 +84,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ghcr.io/buffer379x/puffolio:0.1.0
-          build-args: VERSION=0.1.0
+          tags: ghcr.io/buffer379x/puffolio:${{ inputs.version }}
+          build-args: VERSION=${{ inputs.version }}
           labels: org.opencontainers.image.revision=${{ inputs.source_sha }}
           sbom: true
           provenance: mode=max
@@ -93,10 +93,12 @@ jobs:
         id: identity
         env:
           EXPECTED_DIGEST: ${{ steps.build.outputs.digest || steps.version.outputs.digest }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           test -n "$EXPECTED_DIGEST"
-          python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio \
-            --source-sha '${{ inputs.source_sha }}' --expected-digest "$EXPECTED_DIGEST" --output work/release/index.json
+          python3 docs/scripts/release-image.py --image ghcr.io/buffer379x/puffolio --version "$RELEASE_VERSION" \
+            --source-sha "$SOURCE_SHA" --expected-digest "$EXPECTED_DIGEST" --output work/release/index.json
           echo "digest=$EXPECTED_DIGEST" >> "$GITHUB_OUTPUT"
       - name: Preserve release index identity for retries
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -124,12 +126,13 @@ jobs:
         env:
           INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
           SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           python3 - <<'PY'
           import json, os
           data=json.load(open('work/release/index.json'))
           assert data['digest']==os.environ['INDEX_DIGEST']
-          assert data['sourceSha']==os.environ['SOURCE_SHA'] and data['version']=='0.1.0'
+          assert data['sourceSha']==os.environ['SOURCE_SHA'] and data['version']==os.environ['RELEASE_VERSION']
           assert set(data['platforms'])=={'amd64','arm64'}
           PY
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
@@ -178,6 +181,7 @@ jobs:
     env:
       IMAGE: ghcr.io/buffer379x/puffolio
       INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
+      RELEASE_VERSION: ${{ inputs.version }}
       ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -196,7 +200,7 @@ jobs:
           mkdir -p "$DOCKER_CONFIG" work/release-assets
           printf '{}\n' > "$DOCKER_CONFIG/config.json"
           docker pull --platform "linux/$ARCH" "$IMAGE@$INDEX_DIGEST"
-          test "$(docker buildx imagetools inspect "$IMAGE:0.1.0" --format '{{.Manifest.Digest}}')" = "$INDEX_DIGEST"
+          test "$(docker buildx imagetools inspect "$IMAGE:$RELEASE_VERSION" --format '{{.Manifest.Digest}}')" = "$INDEX_DIGEST"
           docker buildx imagetools inspect "$IMAGE@$INDEX_DIGEST" --raw > work/index.json
           python3 - <<'PY'
           import json,os
@@ -239,6 +243,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: ${{ inputs.source_sha }}
+      RELEASE_VERSION: ${{ inputs.version }}
       INDEX_DIGEST: ${{ needs.publish-image.outputs.digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -259,8 +264,18 @@ jobs:
           rm work/release-assets/digest-amd64.txt work/release-assets/digest-arm64.txt
           cd work/release-assets
           sha256sum compose.yaml puffolio.xml image-digests.txt *.spdx.json scan-*.json > SHA256SUMS
+      # Kept before publishing: if GitHub refuses the workflow token, the owner can
+      # finish the release from exactly these verified files (docs/releasing.md).
+      - name: Preserve assembled release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: work/release-assets/
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 30
       - name: Create release after all verification gates
         run: |
-          gh release create v0.1.0 work/release-assets/* \
-            --repo Buffer379x/puffolio --target "$SOURCE_SHA" --title 'Puffolio 0.1.0' \
-            --notes-file docs/release-0.1.0.md --latest=false
+          gh release create "v$RELEASE_VERSION" work/release-assets/* \
+            --repo Buffer379x/puffolio --target "$SOURCE_SHA" --title "Puffolio $RELEASE_VERSION" \
+            --notes-file "docs/release-$RELEASE_VERSION.md" --latest

@@ -1,6 +1,6 @@
 services:
   puffolio:
-    image: ghcr.io/buffer379x/puffolio:0.1.0
+    image: ghcr.io/buffer379x/puffolio:0.2.0
     container_name: puffolio
     user: "99:100"
     read_only: true
@@ -13,7 +13,8 @@ services:
     environment:
       PUFFOLIO_DATA_DIR: /data
       PUFFOLIO_HTTP_ADDR: ":8080"
-      PUFFOLIO_BASE_URL: ${PUFFOLIO_BASE_URL:-http://localhost:8787}
+      # Leer: Puffolio akzeptiert die aufgerufene Adresse. Nur zum Festlegen setzen.
+      PUFFOLIO_BASE_URL: ${PUFFOLIO_BASE_URL:-}
       PUFFOLIO_COOKIE_SECURE: ${PUFFOLIO_COOKIE_SECURE:-false}
       TZ: ${TZ:-Europe/Berlin}
     volumes:

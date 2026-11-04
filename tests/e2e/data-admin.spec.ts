@@ -30,21 +30,11 @@ test('real ZIP export/import preview and commit; trash restores and permanently 
   await expect(app.page.getByText('Der Papierkorb ist leer.', { exact: true })).toBeVisible();
   expect((await app.api.get('/api/v1/liquids/' + liquid.id)).status()).toBe(404);
 });
-test('admin invitation link is real and backup requires the administrator password', async ({
-  app,
-}) => {
-  await goto(app, '/admin');
-  await app.page.getByRole('button', { name: 'Nutzer einladen', exact: true }).click();
-  const d = app.page.getByRole('dialog');
-  await d.getByLabel('Benutzername', { exact: true }).fill('guest');
-  await d.getByLabel('Anzeigename', { exact: true }).fill('Gast');
-  await d.getByRole('button', { name: 'Einladung erstellen', exact: true }).click();
-  const link = await d.getByLabel('Einladungslink').inputValue();
-  expect(new URL(link).pathname).toBe('/invite');
-  expect(new URL(link).searchParams.get('token')).toBeTruthy();
-  await d.getByRole('button', { name: 'Schließen', exact: true }).last().click();
-  await expect(app.page.getByRole('cell', { name: 'Gast', exact: true })).toBeVisible();
+test('backup in the data settings requires the administrator password', async ({ app }) => {
+  await goto(app, '/settings?section=data');
+  await expect(app.page.getByRole('link', { name: 'Verwaltung' })).toHaveCount(0);
   await app.page.getByRole('button', { name: 'Vollständige Sicherung', exact: true }).click();
+  const d = app.page.getByRole('dialog');
   await d.getByLabel('Administratorpasswort').fill(app.password);
   const pending = app.page.waitForEvent('download');
   await d.getByRole('button', { name: 'Sicherung herunterladen', exact: true }).click();

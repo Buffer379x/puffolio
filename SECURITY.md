@@ -14,11 +14,13 @@ Details und ohne private Daten, um einen privaten Meldeweg abzustimmen.
 
 ## Vertrauensgrenzen
 
-Normale Nutzer haben getrennte persönliche Sammlungen. Administratoren
-verwalten Konten und Instanzsicherungen. Wer den Host, die Datenbankdateien oder
+Puffolio hat ein Administratorkonto. Die Sammlung (Liquids, Felder, Tags,
+zugeschnittene Bilder, Dashboard) ist ohne Anmeldung für alle lesbar, die die
+Adresse erreichen. Jede Änderung, der Papierkorb, unbeschnittene Originalbilder,
+Export und Sicherung erfordern die Anmeldung; der Server erzwingt das. Wer den Host, die Datenbankdateien oder
 Sicherungen kontrolliert, kann gespeicherte Inhalte technisch lesen.
 Sicherungen und eigene Exporte sind vertraulich; sie sind nicht verschlüsselt.
 
-Der Setup-Code wird nur im Datenverzeichnis erzeugt. Es gibt keine
+Der einmalige Setup-Code steht im Datenverzeichnis und im Container-Log. Es gibt keine
 Standardzugangsdaten. Das Datenverzeichnis gehört auf lokalen Speicher; NFS
 und SMB sind für den aktiven SQLite-WAL-Betrieb nicht unterstützt.

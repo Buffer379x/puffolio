@@ -186,7 +186,7 @@ func TestRGBA16AndAdam7UploadPreservesAlphaGeometryAndAxisBoundary(t *testing.T)
 					t.Fatal(err)
 				}
 				b := im.Bounds()
-				if variant != "master" && b.Dx()*3 != b.Dy()*4 {
+				if variant != "master" && b.Dx() != b.Dy() {
 					t.Fatal("invalid physical crop", b)
 				}
 				if variant == "thumbnail" && max(b.Dx(), b.Dy()) > 480 {

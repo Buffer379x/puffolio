@@ -148,7 +148,7 @@ func validID(id string) bool {
 	}
 	return true
 }
-func ValidateCrop(c Crop, w, h int) error {
+func validCropBounds(c Crop) error {
 	for _, v := range []float64{c.X, c.Y, c.Width, c.Height} {
 		if math.IsNaN(v) || math.IsInf(v, 0) {
 			return fault.Validation("Ungültiger Ausschnitt")
@@ -157,20 +157,40 @@ func ValidateCrop(c Crop, w, h int) error {
 	if c.X < 0 || c.Y < 0 || c.Width <= 0 || c.Height <= 0 || c.X+c.Width > 1.00000001 || c.Y+c.Height > 1.00000001 {
 		return fault.Validation("Ausschnitt außerhalb des Bildes")
 	}
+	return nil
+}
+
+// ValidateCrop checks a crop to be applied now: images are square.
+func ValidateCrop(c Crop, w, h int) error {
+	if e := validCropBounds(c); e != nil {
+		return e
+	}
 	pw, ph := c.Width*float64(w), c.Height*float64(h)
-	if pw <= 0 || ph <= 0 || math.Abs(pw-ph*4/3) > 1.5 {
-		return fault.Validation("Ausschnitt benötigt das Seitenverhältnis 4:3")
+	if pw <= 0 || ph <= 0 || math.Abs(pw-ph) > 1.5 {
+		return fault.Validation("Ausschnitt muss quadratisch sein")
+	}
+	return nil
+}
+
+// ValidateStoredCrop also accepts the 4:3 crops of images created by 0.1.0, so
+// their exports stay importable. The app shows them centred in the square slot
+// and turns them into a square when the crop is next edited.
+func ValidateStoredCrop(c Crop, w, h int) error {
+	if e := validCropBounds(c); e != nil {
+		return e
+	}
+	pw, ph := c.Width*float64(w), c.Height*float64(h)
+	if pw <= 0 || ph <= 0 || math.Abs(pw-ph) > 1.5 && math.Abs(pw-ph*4/3) > 1.5 {
+		return fault.Validation("Ungültiges Seitenverhältnis des Ausschnitts")
 	}
 	return nil
 }
 func centerCrop(w, h int) Crop {
 	pw, ph := float64(w), float64(h)
-	if pw/ph > 4.0/3.0 {
-		nw := ph * 4 / 3
-		return Crop{X: (pw - nw) / 2 / pw, Width: nw / pw, Height: 1}
+	if pw > ph {
+		return Crop{X: (pw - ph) / 2 / pw, Width: ph / pw, Height: 1}
 	}
-	nh := pw * 3 / 4
-	return Crop{Y: (ph - nh) / 2 / ph, Width: 1, Height: nh / ph}
+	return Crop{Y: (ph - pw) / 2 / ph, Width: 1, Height: pw / ph}
 }
 func (s *Service) save(ctx context.Context, cid string, im image.Image, c Crop) (m Media, err error) {
 	if e := ctx.Err(); e != nil {
@@ -223,16 +243,11 @@ func (s *Service) save(ctx context.Context, cid string, im image.Image, c Crop) 
 	}
 	cropped := image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
 	stdDraw.Draw(cropped, cropped.Bounds(), im, r.Min, stdDraw.Src)
-	width := r.Dx()
-	if width > 1600 {
-		width = 1600
+	side := min(r.Dx(), 1600)
+	if side < 4 {
+		side = 4
 	}
-	width = width / 4 * 4
-	if width < 4 {
-		width = 4
-	}
-	height := width * 3 / 4
-	output := image.NewRGBA(image.Rect(0, 0, width, height))
+	output := image.NewRGBA(image.Rect(0, 0, side, side))
 	draw.CatmullRom.Scale(output, output.Bounds(), cropped, cropped.Bounds(), stdDraw.Src, nil)
 	if e = encode("image.jpg", output); e != nil {
 		return m, e
@@ -243,6 +258,11 @@ func (s *Service) save(ctx context.Context, cid string, im image.Image, c Crop) 
 	if e = ctx.Err(); e != nil {
 		return m, e
 	}
+	// Rename and row insert form the publish step a snapshot must not observe halfway.
+	if e = s.Store.Writer.LockContext(ctx); e != nil {
+		return m, e
+	}
+	defer s.Store.Writer.Unlock()
 	dest := filepath.Join(root, m.ID)
 	if e = os.Rename(staging, dest); e != nil {
 		return m, e

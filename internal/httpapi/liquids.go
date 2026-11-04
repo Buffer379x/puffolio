@@ -15,6 +15,12 @@ func (s *server) listLiquids(w http.ResponseWriter, r *http.Request) error {
 	if e != nil {
 		return e
 	}
+	if q.Trash && current(r).Visitor {
+		return fault.New(401, "unauthorized", "Anmeldung erforderlich")
+	}
+	if _, q.Shelf, e = s.shelfRules(r); e != nil {
+		return e
+	}
 	p, e := liquids.List(r.Context(), s.Store.DB, current(r).User.CollectionID, q)
 	if e != nil {
 		return e
@@ -60,8 +66,21 @@ func (s *server) getLiquid(w http.ResponseWriter, r *http.Request) error {
 	if e != nil {
 		return e
 	}
+	if l.DeletedAt != nil && current(r).Visitor {
+		return fault.NotFound()
+	}
+	if e = s.withShelfLife(r, &l); e != nil {
+		return e
+	}
 	write(w, 200, l)
 	return nil
+}
+func (s *server) withShelfLife(r *http.Request, l *liquids.Liquid) error {
+	_, rules, e := s.shelfRules(r)
+	if e == nil {
+		l.ShelfLife = rules.Of(*l)
+	}
+	return e
 }
 func (s *server) createLiquid(w http.ResponseWriter, r *http.Request) error {
 	return s.saveLiquid(w, r, true)
@@ -88,6 +107,9 @@ func (s *server) saveLiquid(w http.ResponseWriter, r *http.Request, create bool)
 	}
 	l, e := liquids.Save(r.Context(), s.Store.DB, current(r).User.CollectionID, id, in, loc)
 	if e != nil {
+		return e
+	}
+	if e = s.withShelfLife(r, &l); e != nil {
 		return e
 	}
 	status := 200

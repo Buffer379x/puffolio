@@ -45,7 +45,7 @@ test('409 keeps visible draft and hidden field values survive subsequent edit', 
     visibility: { ...text.visibility, form: false },
   });
   await goto(app, '/liquids');
-  await app.page.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
+  await app.page.getByRole('button', { name: /bearbeiten$/ }).click();
   await app.page.getByLabel('Name', { exact: true }).fill('Mein Entwurf');
   await app.write('/liquids/' + liquid.id, 'PATCH', {
     version: liquid.version,
@@ -56,7 +56,7 @@ test('409 keeps visible draft and hidden field values survive subsequent edit', 
   await expect(app.page.getByLabel('Name', { exact: true })).toHaveValue('Mein Entwurf');
   await app.page.getByRole('button', { name: 'Abbrechen', exact: true }).click();
   await app.page.getByRole('button', { name: 'Bestätigen', exact: true }).click();
-  await app.page.getByRole('button', { name: 'Bearbeiten', exact: true }).click();
+  await app.page.getByRole('button', { name: /bearbeiten$/ }).click();
   await expect(app.page.getByLabel('Name', { exact: true })).toHaveValue('Anderer Stand');
   await app.page.getByLabel(quantity.label, { exact: true }).fill('2,5');
   await app.page.getByRole('button', { name: 'Speichern', exact: true }).click();

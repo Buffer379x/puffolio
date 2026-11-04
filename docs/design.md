@@ -1,37 +1,43 @@
 # Gestaltungsregeln
 
-Puffolio verwendet gemeinsame Bausteine statt eigener Varianten je Seite.
-Neue Funktionen übernehmen diese Regeln und werden auf Smartphone und Desktop,
-mit Tastatur sowie in beiden Farbschemata geprüft.
+Die Referenz für das Aussehen ist die laufende App, nicht ein separater Entwurf:
+`pnpm --dir web demo` startet sie mit Beispieldaten, `pnpm --dir web screenshots`
+erzeugt daraus `docs/screenshots`. Oberflächen entstehen aus den
+gemeinsamen Bausteinen in `web/src/components` und dem einen Stylesheet
+`web/src/styles/app.css`. Neue Funktionen werden auf Smartphone und Desktop, mit
+Tastatur und in beiden Farbschemata geprüft.
 
-- Systemschriften; UI-Größen 12, 14, 16, 24, 28 und 32 CSS-Pixel.
-- 14-px-Labels und Buttontexte, 16-px-Eingaben; Zusatztexte mindestens 12 px.
-- Interaktive Ziele mindestens 44 px hoch, Iconaktionen mindestens 44 × 44 px.
-- Abstandsskala 4/8/12/16/20/24/32/40/48/64 px.
-- Radien: Controls 8 px, Panels und Dialoge 16 px, nicht interaktive Tags 4 px.
-- Desktopnavigation 232 px; bis 900 px Menüschublade. Navigationsinhalt muss
-  bei geringer Höhe scrollbar bleiben. Geschlossenes Menü ist nicht bedienbar.
-- Inhalt maximal 1360 px, Seitenränder 32 px bzw. mobil 16 px.
-- Kartenraster anhand tatsächlicher Inhaltsbreite, Mindestkartenbreite 240 px.
-  Karten einer Rasterzeile sind gleich hoch; Aktionen stehen an derselben Kante.
-- Alle Liquidbildplätze haben 4:3 und zeigen denselben bestätigten Ausschnitt.
-- Einfache Formularfelder paarweise; Name, Tags, Rating, Upload und Notizen
-  breit. Einzelne Restfelder breit; niemals die Nutzerreihenfolge verändern.
-  Bis 600 px einspaltig.
-- Dialoge teilen Kopf, Körper und Aktionsleiste. Normalerweise scrollt nur der
-  Körper. Bei geringer Höhe ist ein Gesamtscroll-Fallback erforderlich. Mobile
-  Liquidformulare sind bildschirmfüllend. Fokus und ESC sind verbindlich.
-- Gleiche Kartenbasis für Tools, dort ausschließlich Titel und Bild.
-- Theme ausschließlich im Menü, Widgets ausschließlich im Dashboard,
-  Ansichtsoptionen ausschließlich auf der Liquids-Seite.
-- Kurze sachliche UI-Texte; zusätzliche Erklärungen in aufrufbaren Hilfen.
-  Notwendige Einheiten und Fehlermeldungen stehen direkt am Feld.
-- Eine Primär-, Sekundär- und Gefahrvariante, keine neue kleine Größenfamilie.
-- Sichtbarer Fokus, Kontrastziel 4,5:1 für Text und 3:1 für relevante
-  Controlgrenzen. Auswahl nicht ausschließlich durch Farbe kennzeichnen.
-- Reduzierte Bewegung beachten, keine externen Fonts oder Marketing-Tracker.
+## Grundwerte
 
-Bei Änderungen: vorhandenen Baustein wählen, lange/fehlende/fehlerhafte Werte
-prüfen, gemeinsame Tokens statt Seitensondermaßen ändern und die Prüfung
-dokumentieren. Die Referenzmatrix umfasst 320/360/390/768/900/1280/1440 px,
-200 % Zoom sowie niedrige Fenster und mobile Bildschirmtastaturen.
+- Systemschriften; UI-Größen 12, 14, 16, 24, 28 und 32 px. Labels und Buttons 14 px,
+  Eingaben 16 px.
+- Abstände 4/8/12/16/20/24/32/40/48/64 px. Radien: Controls 8 px, Panels und Dialoge
+  16 px, Tags 4 px. Leichte Rahmen statt starker Schatten.
+- Interaktive Ziele mindestens 44 px hoch, Iconaktionen 44 × 44 px.
+- Inhalt maximal 1360 px, Seitenränder 32 px, mobil 16 px. Breakpoints 1199, 900, 600.
+- Farben nur über die Tokens in `tokens.css`. Normaler Text mindestens 4,5:1.
+
+## Bausteine
+
+| Baustein | Regel |
+| --- | --- |
+| `Button`, `IconButton`, `SegmentedControl` | Einzige Bedienelemente; Primär nur für die Hauptaktion je Bereich |
+| `Icon` | Einziges Iconset, 24-px-Raster; keine Emoji |
+| `Panel`, `section-card` | Einzige Flächen für Inhalte |
+| `ItemCard` / `LiquidCard` | Kartenraster, das auch Tools nutzt; die ganze Karte öffnet das Detail, Leerwerte belegen keinen Platz |
+| `LiquidImage` | Einziger Bildplatz: quadratisch, gefüllt, Thumbnail außer im Detail; ohne Foto Flasche in der Liquidfarbe |
+| `ShelfBar` | Haltbarkeit: Länge und Farbe aus dem Restanteil, Grün bis Rot, immer mit Text („80 %“, „Abgelaufen“) |
+| `Stars` | Lesende Bewertung; keine Bewertung ist „—“, nie null Sterne |
+| `Dialog`, `Confirm` | Einzige Überlagerungen; mobil bildschirmfüllend für Liquidformulare |
+| `useToast` | Bestätigung ohne sichtbare Änderung sowie „Rückgängig“ |
+
+## Texte
+
+Kurze Funktionsnamen, keine Marketingtexte. Erklärungen nur im aufrufbaren
+Hilfe-Pop-up, Fehler direkt am Feld. Leerzustand: ein Satz und höchstens eine Aktion.
+
+## Besucher
+
+Besucher sehen dieselbe Oberfläche ohne ändernde Bedienelemente. Bedienelemente
+werden entfernt, nicht deaktiviert. Sicherheit entsteht auf dem Server, nicht durch
+das Ausblenden.

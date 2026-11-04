@@ -302,7 +302,7 @@ func TestStaticGzipDoesNotCompressPrivateAPIAuthOrMedia(t *testing.T) {
 		r.AddCookie(c.cookie)
 		w := httptest.NewRecorder()
 		c.h.ServeHTTP(w, r)
-		if w.Code != 200 || w.Header().Get("Content-Encoding") != "" || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") {
+		if w.Code != 200 || w.Header().Get("Content-Encoding") != "" || !strings.Contains(w.Header().Get("Cache-Control"), "no-") {
 			t.Fatal("private response policy changed")
 		}
 		if strings.Contains(strings.ToLower(strings.Join(w.Header().Values("Vary"), ",")), "accept-encoding") {

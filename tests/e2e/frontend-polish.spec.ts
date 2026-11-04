@@ -23,9 +23,9 @@ test('visible labels and grouped field descriptions work with native controls', 
   );
   await dialog
     .locator('label')
-    .filter({ hasText: /^Menge$/ })
+    .filter({ hasText: /^Nikotin$/ })
     .click();
-  const quantity = dialog.getByLabel('Menge', { exact: true });
+  const quantity = dialog.getByLabel('Nikotin', { exact: true });
   await expect(quantity).toBeFocused();
   await quantity.fill('keine Zahl');
   await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
@@ -56,7 +56,7 @@ test('typed table values stay unbroken, actions align and bounded scrolling reac
   for (const f of definitions) {
     let value: unknown;
     if (f.type === 'rating') value = 4;
-    else if (f.type === 'number') value = f.label === 'Menge' ? '120.0' : '3.0';
+    else if (f.type === 'number') value = f.config.scale ? '3.0' : '24';
     else if (f.type === 'date') value = '2026-11-03';
     else if (f.type === 'color') value = '#A1B2C3';
     else if (f.type === 'text') value = 'Beispielhersteller';
@@ -110,7 +110,8 @@ test('typed table values stay unbroken, actions align and bounded scrolling reac
     ).toBe(true);
     expect(geometry.typed.length).toBeGreaterThan(3);
     expect(
-      geometry.typed.every((rects) => visualLineCount(rects) === 1),
+      // Ratings are drawn as icons and have no text line of their own.
+      geometry.typed.every((rects) => visualLineCount(rects) <= 1),
       JSON.stringify(geometry),
     ).toBe(true);
     expect(geometry.textHeight).toBeGreaterThan(20);

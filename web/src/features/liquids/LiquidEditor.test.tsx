@@ -53,7 +53,9 @@ it('preserves the edited draft on409 and submits only changed shown values', asy
     },
   };
   render(
-    <AppContext.Provider value={{ fields: [field, hidden] } as any}>
+    <AppContext.Provider
+      value={{ fields: [field, hidden], preferences: { roles: {}, shelfLifeMonths: 0 } } as any}
+    >
       <LiquidEditor
         liquid={original}
         onClose={() => {}}

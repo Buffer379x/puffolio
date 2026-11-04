@@ -44,7 +44,7 @@ export function LiquidEditor(props: LiquidEditorProps) {
   return <LiquidEditorForm {...props} liquid={existing ? load.data : props.liquid} />;
 }
 function LiquidEditorForm({ liquid, duplicate = false, onClose, onSaved }: LiquidEditorProps) {
-  const { fields } = useApp();
+  const { fields, preferences } = useApp();
   const isNew = !liquid || duplicate;
   const [name, setName] = useState(liquid?.name || '');
   const [favorite, setFavorite] = useState(liquid?.favorite || false);
@@ -151,6 +151,11 @@ function LiquidEditorForm({ liquid, duplicate = false, onClose, onSaved }: Liqui
                   field={f}
                   value={values[f.id]?.value ?? null}
                   isNew={isNew}
+                  fallback={
+                    f.id === preferences.roles.shelfOverride && preferences.shelfLifeMonths > 0
+                      ? `Leer: Standard (${preferences.shelfLifeMonths} Monate)`
+                      : undefined
+                  }
                   error={
                     fieldErrors[f.id] ||
                     (a.error instanceof APIError ? a.error.fields[f.id] : undefined)

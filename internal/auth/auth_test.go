@@ -38,22 +38,6 @@ func TestSessionsAndDisable(t *testing.T) {
 		t.Fatal("disabled user session accepted")
 	}
 }
-func TestInvitationExpires(t *testing.T) {
-	s, e := store.Open(context.Background(), config.Config{DataDir: t.TempDir()})
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer s.Close()
-	a := New(s)
-	u, token, e := a.Invite(context.Background(), "bob", "Bob", "user")
-	if e != nil {
-		t.Fatal(e)
-	}
-	s.DB.Exec("UPDATE one_time_tokens SET expires_at=? WHERE user_id=?", time.Now().Add(-time.Hour).Unix(), u.ID)
-	if _, e = a.ConsumeInvitation(context.Background(), token, "A-long-test-password", ""); e == nil {
-		t.Fatal("expired invitation accepted")
-	}
-}
 func TestPasswordHash(t *testing.T) {
 	hash, e := HashPassword("A-long-test-password")
 	if e != nil {
@@ -100,23 +84,5 @@ func TestSessionIdleAndAbsoluteExpiry(t *testing.T) {
 	s.DB.Exec("UPDATE sessions SET expires_at=? WHERE token_hash=?", time.Now().Add(-time.Second).Unix(), Hash(absolute))
 	if _, e = a.Session(context.Background(), absolute); e == nil {
 		t.Fatal("absolute expiry ignored")
-	}
-}
-func TestInvitationIsSingleUse(t *testing.T) {
-	s, e := store.Open(context.Background(), config.Config{DataDir: t.TempDir()})
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer s.Close()
-	a := New(s)
-	_, token, e := a.Invite(context.Background(), "bob", "Bob", "user")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e = a.ConsumeInvitation(context.Background(), token, "A-long-test-password", ""); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = a.ConsumeInvitation(context.Background(), token, "A-long-test-password", ""); e == nil {
-		t.Fatal("invitation reused")
 	}
 }

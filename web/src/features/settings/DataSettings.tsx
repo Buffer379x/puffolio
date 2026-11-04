@@ -61,7 +61,7 @@ export function DataSettings() {
         {notice && <p role="status">{notice}</p>}
       </Panel>
       <Panel title="Papierkorb">
-        <p className="muted">Gelöschte Liquids bleiben 30 Tage wiederherstellbar.</p>
+        <p className="muted panel-note">Gelöschte Liquids bleiben 30 Tage wiederherstellbar.</p>
         <ErrorMessage error={trash.error} />
         {trash.loading && <p role="status">Laden…</p>}
         {selected.length > 0 && (
@@ -114,27 +114,29 @@ export function DataSettings() {
             </div>
           ))}
         </div>
-        <div className="pagination">
-          <Button
-            disabled={page === 1}
-            onClick={() => {
-              setPage(page - 1);
-              setSelected([]);
-            }}
-          >
-            Zurück
-          </Button>
-          <span>Seite {page}</span>
-          <Button
-            disabled={!trash.data || page * 24 >= trash.data.total}
-            onClick={() => {
-              setPage(page + 1);
-              setSelected([]);
-            }}
-          >
-            Weiter
-          </Button>
-        </div>
+        {(page > 1 || (trash.data?.total || 0) > 24) && (
+          <div className="pagination">
+            <Button
+              disabled={page === 1}
+              onClick={() => {
+                setPage(page - 1);
+                setSelected([]);
+              }}
+            >
+              Zurück
+            </Button>
+            <span>Seite {page}</span>
+            <Button
+              disabled={!trash.data || page * 24 >= trash.data.total}
+              onClick={() => {
+                setPage(page + 1);
+                setSelected([]);
+              }}
+            >
+              Weiter
+            </Button>
+          </div>
+        )}
       </Panel>
       {preview && (
         <Dialog

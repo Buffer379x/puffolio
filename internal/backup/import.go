@@ -64,7 +64,7 @@ func validateCollection(c Collection, a *checkedArchive) error {
 		if !unique(m.ID) || m.Width < 1 || m.Height < 1 || m.Width > 1600 || m.Height > 1600 {
 			return fault.Validation("Ungültige Mediendaten")
 		}
-		if e := media.ValidateCrop(m.Crop, m.Width, m.Height); e != nil {
+		if e := media.ValidateStoredCrop(m.Crop, m.Width, m.Height); e != nil {
 			return e
 		}
 		for _, name := range []string{"master.jpg", "image.jpg", "thumbnail.jpg"} {
@@ -84,7 +84,8 @@ func validateCollection(c Collection, a *checkedArchive) error {
 			if name == "master.jpg" && (cfg.Width != m.Width || cfg.Height != m.Height) {
 				return fault.Validation("Mastermaße stimmen nicht überein")
 			}
-			if name != "master.jpg" && cfg.Width*3 != cfg.Height*4 {
+			// Square since 0.2.0; exports from 0.1.0 carry 4:3 images.
+			if name != "master.jpg" && cfg.Width != cfg.Height && cfg.Width*3 != cfg.Height*4 {
 				return fault.Validation("Bild hat falsches Seitenverhältnis")
 			}
 			if cfg.Width > 1600 || cfg.Height > 1600 || name == "thumbnail.jpg" && (cfg.Width > 480 || cfg.Height > 480) {
@@ -440,6 +441,10 @@ func remapPreferences(raw json.RawMessage, remap func(string) string) (json.RawM
 		roles[k] = remap(id)
 	}
 	p["roles"], _ = json.Marshal(roles)
+	var consumed string
+	if json.Unmarshal(p["consumedOption"], &consumed) == nil && consumed != "" {
+		p["consumedOption"], _ = json.Marshal(remap(consumed))
+	}
 	p["version"] = json.RawMessage("1")
 	return json.Marshal(p)
 }

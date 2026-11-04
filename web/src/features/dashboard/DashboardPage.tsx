@@ -1,34 +1,50 @@
 import { createUUID } from '../../app/uuid';
 import { useDraftGuard } from '../../components/useDraftGuard';
 import { FieldValue } from '../../components/FieldValue';
-import { useState, useEffect } from 'react';
+import { LiquidImage } from '../../components/LiquidImage';
+import { ShelfBar } from '../../components/ShelfBar';
+import { useState } from 'react';
 import { api } from '../../app/api';
-import type { Widget, WidgetType, Layout, WidgetResult, Liquid } from '../../app/types';
-import { useApp, useLoad, useAction, useDirty } from '../../app/state';
+import type {
+  Field,
+  Filter,
+  Layout,
+  Liquid,
+  Tag,
+  Widget,
+  WidgetResult,
+  WidgetType,
+} from '../../app/types';
+import { useApp, useLoad, useAction, useDirty, useCanEdit } from '../../app/state';
 import {
   Button,
   IconButton,
   Dialog,
   ErrorMessage,
   Empty,
+  Icon,
   Panel,
   PageHeader,
   Confirm,
+  Stars,
 } from '../../components/ui';
 import { FieldInput } from '../../components/FieldInput';
 import { paletteColor } from '../../components/PalettePicker';
-import { formatDecimal } from '../fields/values';
+import { formatNumber } from '../fields/values';
 import { LiquidEditor } from '../liquids/LiquidEditor';
 import { LiquidDetail } from '../liquids/LiquidDetail';
 import { FilterBuilder } from '../liquids/FilterBuilder';
 import { normalizeFilter, useTags } from '../liquids/data';
+import { useToast } from '../../components/toast';
 const titles: Record<WidgetType, string> = {
   count: 'Anzahl Liquids',
-  sum: 'Mengen-Summe',
   favorites: 'Favoriten',
   average: 'Durchschnittsbewertung',
+  expired: 'Abgelaufen',
+  expiring: 'Läuft bald ab',
+  sum: 'Summe',
   recent: 'Zuletzt hinzugefügt',
-  low: 'Niedriger Bestand',
+  low: 'Unter Grenzwert',
   tags: 'Tag-Verteilung',
   dates: 'Datumsliste',
 };
@@ -39,6 +55,13 @@ const fieldType: Partial<Record<WidgetType, string>> = {
   tags: 'tags',
   dates: 'date',
 };
+const statIcons: Partial<Record<WidgetType, string>> = {
+  count: 'liquids',
+  favorites: 'heart',
+  average: 'star',
+  sum: 'box',
+  expired: 'calendar',
+};
 function WidgetEditor({
   widget,
   onClose,
@@ -48,7 +71,7 @@ function WidgetEditor({
   onClose: () => void;
   onAccept: (w: Widget) => void;
 }) {
-  const { fields } = useApp();
+  const { fields, preferences } = useApp();
   const tags = useTags();
   const [draft, setDraft] = useState<Widget>(() =>
     widget
@@ -85,7 +108,7 @@ function WidgetEditor({
                 if (type && !referenced) throw new Error('Feld auswählen.');
                 if (w.type === 'low' && !w.threshold?.trim())
                   throw new Error('Grenzwert eingeben.');
-                if (w.type === 'dates' && (!w.from || !w.to || w.from > w.to))
+                if (w.type === 'dates' && !w.window && (!w.from || !w.to || w.from > w.to))
                   throw new Error('Gültiges Datumsfenster wählen.');
                 if (w.type === 'low' && referenced && w.threshold !== undefined)
                   w.threshold = String(
@@ -117,7 +140,12 @@ function WidgetEditor({
             value={draft.type}
             onChange={(e) => {
               const t = e.target.value as WidgetType;
-              patch({ type: t, title: titles[t], fieldId: undefined });
+              patch({
+                type: t,
+                title: titles[t],
+                fieldId: t === 'dates' ? preferences.roles.purchase : undefined,
+                window: t === 'dates' ? 'past' : undefined,
+              });
             }}
           >
             {Object.entries(titles).map(([id, title]) => (
@@ -167,7 +195,7 @@ function WidgetEditor({
             </select>
           </label>
         )}
-        {['recent', 'low', 'tags', 'dates'].includes(draft.type) && (
+        {['recent', 'low', 'tags', 'dates', 'expiring'].includes(draft.type) && (
           <label className="form-field">
             Einträge
             <select
@@ -200,17 +228,34 @@ function WidgetEditor({
         )}
         {draft.type === 'dates' && (
           <>
-            {(['from', 'to'] as const).map((k, i) => (
-              <label className="form-field" key={k}>
-                {i ? 'Bis' : 'Von'}
-                <input
-                  type="date"
-                  aria-label={i ? 'Widget bis' : 'Widget von'}
-                  value={draft[k] || ''}
-                  onChange={(e) => patch({ [k]: e.target.value })}
-                />
-              </label>
-            ))}
+            <label className="form-field">
+              Zeitraum
+              <select
+                aria-label="Widgetzeitraum"
+                value={draft.window || 'custom'}
+                onChange={(e) =>
+                  patch({
+                    window: e.target.value === 'custom' ? undefined : (e.target.value as 'past'),
+                  })
+                }
+              >
+                <option value="past">Vergangen, neueste zuerst</option>
+                <option value="upcoming">Bevorstehend</option>
+                <option value="custom">Fester Zeitraum</option>
+              </select>
+            </label>
+            {!draft.window &&
+              (['from', 'to'] as const).map((k, i) => (
+                <label className="form-field" key={k}>
+                  {i ? 'Bis' : 'Von'}
+                  <input
+                    type="date"
+                    aria-label={i ? 'Widget bis' : 'Widget von'}
+                    value={draft[k] || ''}
+                    onChange={(e) => patch({ [k]: e.target.value })}
+                  />
+                </label>
+              ))}
           </>
         )}
       </div>
@@ -228,8 +273,186 @@ function WidgetEditor({
     </Dialog>
   );
 }
+/** The first text field reads as a card's subtitle, whatever it is named. */
+const subtitleOf = (liquid: Liquid, fields: Field[]) => {
+  const field = fields.find((f) => f.type === 'text' && !f.archived);
+  const value = field && liquid.values[field.id]?.value;
+  return typeof value === 'string' ? value : '';
+};
+function StatBody({
+  widget,
+  result,
+  field,
+}: {
+  widget: Widget;
+  result: WidgetResult;
+  field?: Field;
+}) {
+  const { navigate, preferences } = useApp();
+  const unit = field?.config.unit;
+  const count = result.count ?? 0;
+  if (widget.type === 'favorites')
+    return (
+      <>
+        <button
+          type="button"
+          className="stat-value stat-link name-button"
+          onClick={() => navigate('/liquids?favorite=true')}
+        >
+          {count}
+        </button>
+        <p className="stat-note">Markiert</p>
+      </>
+    );
+  if (widget.type === 'count')
+    return (
+      <>
+        <button
+          type="button"
+          className="stat-value stat-link name-button"
+          onClick={() => navigate('/liquids')}
+        >
+          {count}
+        </button>
+        <p className="stat-note">{count === 1 ? 'Eintrag' : 'Einträge'}</p>
+      </>
+    );
+  if (widget.type === 'expired')
+    return (
+      <>
+        <div className="stat-value">{preferences.shelfLifeMonths > 0 ? count : '—'}</div>
+        <p className="stat-note">
+          {preferences.shelfLifeMonths > 0
+            ? `Haltedauer ${
+                preferences.shelfLifeMonths % 12
+                  ? preferences.shelfLifeMonths + ' Monate'
+                  : preferences.shelfLifeMonths / 12 + ' Jahre'
+              }`
+            : 'Keine Haltedauer festgelegt'}
+        </p>
+      </>
+    );
+  if (!result.value) return <div className="stat-note">Keine Daten</div>;
+  return (
+    <>
+      <div className="stat-value">
+        {formatNumber(result.value)}
+        {unit && <small>{unit}</small>}
+      </div>
+      <p className="stat-note">
+        {widget.type === 'average'
+          ? `${count} ${count === 1 ? 'Bewertung' : 'Bewertungen'} · von ${field?.config.stars || 5}`
+          : `${count} ${count === 1 ? 'Liquid' : 'Liquids'}`}
+      </p>
+    </>
+  );
+}
+function RecentGrid({
+  items,
+  tags,
+  onOpen,
+}: {
+  items: Liquid[];
+  tags?: Tag[];
+  onOpen: (l: Liquid) => void;
+}) {
+  const { fields, preferences } = useApp();
+  const rating = fields.find((f) => f.id === preferences.roles.rating && !f.archived);
+  return (
+    <div className="recent-grid">
+      {items.map((l) => {
+        const stars = rating && l.values[rating.id]?.value;
+        return (
+          <div className="mini-card" key={l.id}>
+            <LiquidImage liquid={l} tags={tags} />
+            <button type="button" className="name-button" onClick={() => onOpen(l)}>
+              <span>{l.name}</span>
+            </button>
+            <p className="card-subtitle">{subtitleOf(l, fields)}</p>
+            <div className="card-rating-row">
+              {typeof stars === 'number' && <Stars value={stars} max={rating?.config.stars || 5} />}
+            </div>
+            <ShelfBar liquid={l} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function RowList({
+  widget,
+  items,
+  field,
+  tags,
+  onOpen,
+}: {
+  widget: Widget;
+  items: Liquid[];
+  field?: Field;
+  tags?: Tag[];
+  onOpen: (l: Liquid) => void;
+}) {
+  const { fields } = useApp();
+  const shelfRows = widget.type === 'expiring';
+  return (
+    <ul>
+      {items.map((l) => (
+        <li className="compact-row" key={l.id}>
+          <LiquidImage liquid={l} tags={tags} compact />
+          <div className="compact-info">
+            <button type="button" className="name-button" onClick={() => onOpen(l)}>
+              <span>{l.name}</span>
+            </button>
+            {shelfRows ? <ShelfBar liquid={l} /> : <span>{subtitleOf(l, fields)}</span>}
+          </div>
+          {field && !shelfRows && l.values[field.id] && (
+            <span className={widget.type === 'low' ? 'compact-value' : 'compact-date'}>
+              <FieldValue field={field} value={l.values[field.id]?.value} tags={tags} />
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+function TagBars({ result, fieldId }: { result: WidgetResult; fieldId?: string }) {
+  const { navigate } = useApp();
+  const max = Math.max(...result.tags!.map((t) => t.count));
+  const open = (id: string) => {
+    const filter: Filter = {
+      op: 'and',
+      conditions: [{ fieldId, operator: 'any', value: [id] }],
+    };
+    navigate('/liquids?filters=' + encodeURIComponent(JSON.stringify(filter)));
+  };
+  return (
+    <ul className="tag-chart">
+      {result.tags!.map((t) => (
+        <li key={t.id}>
+          <button type="button" className="chart-button" onClick={() => open(t.id)}>
+            <div className="chart-label">
+              <span>{t.name}</span>
+              <strong>{t.count}</strong>
+            </div>
+            <div className="bar-track">
+              <div
+                className="bar-fill"
+                style={{
+                  width: `${(t.count / max) * 100}%`,
+                  backgroundColor: paletteColor(t.paletteId),
+                }}
+              />
+            </div>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
 export function DashboardPage() {
-  const { fields, navigate } = useApp();
+  const { fields, preferences } = useApp();
+  const canEdit = useCanEdit();
+  const toast = useToast();
   const layout = useLoad((s) => api<Layout>('/dashboard', 'GET', undefined, s), []);
   const [draft, setDraft] = useState<Layout>();
   const [widgetEdit, setWidgetEdit] = useState<{
@@ -253,7 +476,7 @@ export function DashboardPage() {
       widgets.length
         ? api<{ items: WidgetResult[] }>('/dashboard/query', 'POST', { widgets }, s)
         : Promise.resolve({ items: [] }),
-    [key],
+    [key, preferences.shelfLifeMonths],
   );
   useDirty(!!draft && JSON.stringify(draft) !== JSON.stringify(layout.data));
   const edit = () => {
@@ -269,27 +492,34 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader title="Dashboard">
-        <Button disabled={!layout.data} onClick={draft ? () => setCancelConfirm(true) : edit}>
-          {draft ? 'Abbrechen' : 'Dashboard anpassen'}
-        </Button>
-        {draft ? (
-          <Button
-            variant="primary"
-            disabled={a.busy}
-            onClick={() =>
-              void a.run(async () => {
-                const saved = await api<Layout>('/dashboard', 'PUT', draft);
-                layout.setData(saved);
-                setDraft(undefined);
-              })
-            }
-          >
-            Speichern
-          </Button>
-        ) : (
-          <Button variant="primary" onClick={() => setNewLiquid(true)}>
-            Liquid hinzufügen
-          </Button>
+        {canEdit && (
+          <>
+            <Button disabled={!layout.data} onClick={draft ? () => setCancelConfirm(true) : edit}>
+              {!draft && <Icon name="sliders" />}
+              {draft ? 'Abbrechen' : 'Dashboard anpassen'}
+            </Button>
+            {draft ? (
+              <Button
+                variant="primary"
+                disabled={a.busy}
+                onClick={() =>
+                  void a.run(async () => {
+                    const saved = await api<Layout>('/dashboard', 'PUT', draft);
+                    layout.setData(saved);
+                    setDraft(undefined);
+                    toast('Dashboard gespeichert');
+                  })
+                }
+              >
+                Speichern
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => setNewLiquid(true)}>
+                <Icon name="plus" />
+                Liquid hinzufügen
+              </Button>
+            )}
+          </>
         )}
       </PageHeader>
       <ErrorMessage error={a.error || layout.error || query.error} />
@@ -301,14 +531,17 @@ export function DashboardPage() {
             disabled={draft.widgets.length >= 30}
             onClick={() => setWidgetEdit({})}
           >
+            <Icon name="plus" />
             Widget hinzufügen
           </Button>
           <span className="muted">{draft.widgets.length} / 30 Widgets</span>
         </div>
       )}
-      {layout.loading && <p role="status">Laden…</p>}
+      {layout.loading && !layout.data && <p role="status">Laden…</p>}
       {!layout.loading && !widgets.length && (
-        <Empty action={!draft ? <Button onClick={edit}>Widget hinzufügen</Button> : undefined}>
+        <Empty
+          action={canEdit && !draft ? <Button onClick={edit}>Widget hinzufügen</Button> : undefined}
+        >
           Noch keine Widgets.
         </Empty>
       )}
@@ -316,134 +549,106 @@ export function DashboardPage() {
         {widgets.map((w, i) => {
           const result = query.data?.items.find((r) => r.id === w.id);
           const field = fields.find((f) => f.id === w.fieldId);
+          const title = w.title || titles[w.type];
+          const isStat = ['count', 'favorites', 'sum', 'average', 'expired'].includes(w.type);
+          const dragProps = draft
+            ? {
+                draggable: true,
+                onDragStart: () => setDrag(i),
+                onDragOver: (e: React.DragEvent) => e.preventDefault(),
+                onDrop: (e: React.DragEvent) => {
+                  e.preventDefault();
+                  if (drag !== undefined) move(drag, i);
+                  setDrag(undefined);
+                },
+              }
+            : {};
           return (
-            <Panel
+            <div
               key={w.id}
-              className={'widget widget-' + w.size}
-              title={w.title || titles[w.type]}
-              actions={
-                draft ? (
-                  <div className="actions">
+              className={'widget-slot widget-' + w.size + (draft ? ' editing' : '')}
+              {...dragProps}
+            >
+              <Panel
+                className={'widget ' + (isStat ? 'stat-card' : '') + (draft ? ' editing' : '')}
+                title={title}
+                subtitle={
+                  w.type === 'low' && w.threshold
+                    ? `Unter ${formatNumber(w.threshold)}${field?.config.unit ? ' ' + field.config.unit : ''}`
+                    : undefined
+                }
+                actions={
+                  isStat ? (
+                    <span className="stat-icon" aria-hidden="true">
+                      <Icon name={statIcons[w.type] || 'box'} />
+                    </span>
+                  ) : w.type === 'low' && result?.count ? (
+                    <span className="count-badge">{result.count}</span>
+                  ) : undefined
+                }
+              >
+                {query.loading && !result ? (
+                  <p role="status">Laden…</p>
+                ) : result?.error ? (
+                  <p className="field-error">{result.error}</p>
+                ) : !result ? (
+                  <p className="muted">Keine Daten.</p>
+                ) : isStat ? (
+                  <StatBody widget={w} result={result} field={field} />
+                ) : w.type === 'tags' ? (
+                  result.tags?.length ? (
+                    <TagBars result={result} fieldId={w.fieldId} />
+                  ) : (
+                    <p className="muted">Keine Daten.</p>
+                  )
+                ) : result.items?.length ? (
+                  w.type === 'recent' ? (
+                    <RecentGrid items={result.items} tags={tags.data} onOpen={setDetail} />
+                  ) : (
+                    <RowList
+                      widget={w}
+                      items={result.items}
+                      field={field}
+                      tags={tags.data}
+                      onOpen={setDetail}
+                    />
+                  )
+                ) : (
+                  <p className="muted">Keine Daten.</p>
+                )}
+                {draft && (
+                  <div className="widget-edit-actions">
                     <IconButton
-                      label={`${w.title} nach oben`}
-                      icon="arrow"
-                      className="arrow-up"
+                      label={`${title} nach oben`}
+                      icon="up"
                       disabled={i === 0}
                       onClick={() => move(i, i - 1)}
                     />
                     <IconButton
-                      label={`${w.title} nach unten`}
-                      icon="arrow"
-                      className="arrow-down"
+                      label={`${title} nach unten`}
+                      icon="down"
                       disabled={i === widgets.length - 1}
                       onClick={() => move(i, i + 1)}
                     />
+                    <IconButton
+                      label={`${title} bearbeiten`}
+                      icon="edit"
+                      onClick={() => setWidgetEdit({ widget: w, index: i })}
+                    />
+                    <IconButton
+                      label={`${title} entfernen`}
+                      icon="trash"
+                      onClick={() =>
+                        setDraft({
+                          ...draft,
+                          widgets: draft.widgets.filter((x) => x.id !== w.id),
+                        })
+                      }
+                    />
                   </div>
-                ) : undefined
-              }
-            >
-              {draft && (
-                <div
-                  className="widget-edit-actions"
-                  draggable
-                  onDragStart={() => setDrag(i)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (drag !== undefined) move(drag, i);
-                    setDrag(undefined);
-                  }}
-                >
-                  <Button onClick={() => setWidgetEdit({ widget: w, index: i })}>Bearbeiten</Button>
-                  <IconButton
-                    label={`${w.title} entfernen`}
-                    icon="trash"
-                    onClick={() =>
-                      setDraft({
-                        ...draft,
-                        widgets: draft.widgets.filter((x) => x.id !== w.id),
-                      })
-                    }
-                  />
-                  <span className="muted">Verschieben</span>
-                </div>
-              )}
-              {query.loading ? (
-                <p role="status">Laden…</p>
-              ) : result?.error ? (
-                <p className="field-error">{result.error}</p>
-              ) : !result ? (
-                <p className="muted">Keine Daten.</p>
-              ) : ['count', 'favorites', 'sum', 'average'].includes(w.type) ? (
-                <div className="stat-body">
-                  {w.type === 'favorites' ? (
-                    <button
-                      className="stat-number name-button"
-                      onClick={() => navigate('/liquids?favorite=true')}
-                    >
-                      {result.count ?? '—'}
-                    </button>
-                  ) : (
-                    <div className="stat-number">
-                      {w.type === 'sum' && result.count === 0
-                        ? 'Keine Daten'
-                        : result.value !== undefined
-                          ? formatDecimal(result.value)
-                          : result.count !== undefined
-                            ? result.count
-                            : 'Keine Daten'}
-                    </div>
-                  )}
-                  {field?.config.unit && !(w.type === 'sum' && result.count === 0) && (
-                    <span>{field.config.unit}</span>
-                  )}
-                </div>
-              ) : w.type === 'tags' ? (
-                result.tags?.length ? (
-                  <ul className="tag-chart">
-                    {result.tags.map((t) => (
-                      <li key={t.id}>
-                        <span
-                          className="tag"
-                          style={{ backgroundColor: paletteColor(t.paletteId) }}
-                        >
-                          {t.name}
-                        </span>
-                        <span
-                          className="tag-bar"
-                          style={{
-                            width: `${(t.count / Math.max(...result.tags!.map((t) => t.count))) * 100}%`,
-                            backgroundColor: paletteColor(t.paletteId),
-                          }}
-                        />
-                        <strong>{t.count}</strong>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted">Keine Daten.</p>
-                )
-              ) : result.items?.length ? (
-                <ul className="widget-liquids">
-                  {result.items.map((l) => (
-                    <li key={l.id}>
-                      <button className="name-button" onClick={() => setDetail(l)}>
-                        {l.name}
-                      </button>
-                      {field && l.values[field.id] && (
-                        <FieldValue
-                          field={field}
-                          value={l.values[field.id]?.value}
-                          tags={tags.data}
-                        />
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="muted">Keine Daten.</p>
-              )}
-            </Panel>
+                )}
+              </Panel>
+            </div>
           );
         })}
       </div>
@@ -482,6 +687,7 @@ export function DashboardPage() {
           onSaved={() => {
             setNewLiquid(false);
             query.reload();
+            toast('Gespeichert');
           }}
         />
       )}
@@ -495,6 +701,7 @@ export function DashboardPage() {
           onSaved={() => {
             setEditLiquid(undefined);
             query.reload();
+            toast('Gespeichert');
           }}
         />
       )}

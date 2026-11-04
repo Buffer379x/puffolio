@@ -15,7 +15,6 @@ const initial: NicotineInput = {
   aromaMl: '0',
   shotsMl: '',
   concentration: '',
-  concentrationUnit: 'mg/l',
 };
 export function NicotineCalculator() {
   const [input, setInput] = useState(initial);
@@ -38,7 +37,7 @@ export function NicotineCalculator() {
                 Flaschenmenge ist die gesamte Endfüllmenge. Aroma und Base gelten als nikotinfrei.
                 Die Shots haben eine gemeinsame Stärke.
               </p>
-              <p>1 mg/ml = 1.000 mg/l. Volumen und Konzentration erlauben drei Nachkommastellen.</p>
+              <p>Shotstärke in mg/ml. Volumen und Stärke erlauben drei Nachkommastellen.</p>
             </HelpPopover>
           }
         >
@@ -73,18 +72,7 @@ export function NicotineCalculator() {
                         value={input[key]}
                         onChange={(e) => change(key, e.target.value)}
                       />
-                      {key === 'concentration' ? (
-                        <select
-                          aria-label="Einheit der Shotstärke"
-                          value={input.concentrationUnit}
-                          onChange={(e) => change('concentrationUnit', e.target.value)}
-                        >
-                          <option>mg/l</option>
-                          <option>mg/ml</option>
-                        </select>
-                      ) : (
-                        <span>ml</span>
-                      )}
+                      <span>{key === 'concentration' ? 'mg/ml' : 'ml'}</span>
                     </div>
                   )}
                 </FormField>
@@ -114,7 +102,6 @@ export function NicotineCalculator() {
               <dd className="result-main">{formatDecimal(result.baseMl)} ml</dd>
               <dt>Nikotinstärke</dt>
               <dd>{formatDecimal(result.strengthMgMl)} mg/ml</dd>
-              <dd>{formatDecimal(result.strengthMgL)} mg/l</dd>
               <dt>Fertige Menge</dt>
               <dd>{formatDecimal(result.finalMl)} ml</dd>
               <dt>Nikotin gesamt</dt>

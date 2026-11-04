@@ -25,15 +25,13 @@ export function FilterChips({
 }) {
   if (!isFilterStructure(value))
     return (
-      <div className="filter-chips">
-        <Button
-          className="filter-chip"
-          aria-label="Ungültigen Feldfilter entfernen"
-          onClick={() => onChange(undefined)}
-        >
-          Ungültiger Feldfilter<span aria-hidden="true"> ×</span>
-        </Button>
-      </div>
+      <Button
+        className="filter-chip"
+        aria-label="Ungültigen Feldfilter entfernen"
+        onClick={() => onChange(undefined)}
+      >
+        Ungültiger Feldfilter<span aria-hidden="true"> ×</span>
+      </Button>
     );
   const render = (condition: Filter, path: number[]): React.ReactNode => {
     if (condition.op) {
@@ -85,5 +83,5 @@ export function FilterChips({
       </Button>
     );
   };
-  return <div className="filter-chips">{render(value, [])}</div>;
+  return <>{render(value, [])}</>;
 }

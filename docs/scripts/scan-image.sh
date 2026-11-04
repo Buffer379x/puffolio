@@ -34,4 +34,4 @@ docker run --rm --platform "$platform" --user "$(id -u):$(id -g)" \
   --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --ignore-unfixed=false \
   --skip-db-update=false --skip-java-db-update=false --offline-scan=false \
   --ignorefile /dev/null "$image"
-python3 "$(dirname "$0")/recovery-release.py" scan-metadata "$output" "$image" "$platform"
+python3 "$(dirname "$0")/scan-metadata.py" "$output" "$image" "$platform"

@@ -31,7 +31,11 @@ it('cancels a whole layout draft and saves duplicate widgets together with expec
     return new Response('{"version":1,"widgets":[]}');
   });
   render(
-    <AppContext.Provider value={{ fields: [], navigate: () => {} } as any}>
+    <AppContext.Provider
+      value={
+        { fields: [], preferences: { roles: {}, shelfLifeMonths: 0 }, navigate: () => {} } as any
+      }
+    >
       <DashboardPage />
     </AppContext.Provider>,
   );

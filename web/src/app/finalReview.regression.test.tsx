@@ -5,7 +5,6 @@ import { AppContext } from './state';
 import type { Field, Filter } from './types';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { FieldsSettings } from '../features/fields/FieldsSettings';
-import { AdminPage } from '../features/settings/AdminPage';
 import { LiquidsPage } from '../features/liquids/LiquidsPage';
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () {
@@ -118,44 +117,10 @@ it('adds and saves select options when randomUUID is unavailable', async () => {
     /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/,
   );
 });
-it('selects the invitation link and instructs manual copying without Clipboard API', async () => {
-  vi.stubGlobal('navigator', { clipboard: undefined });
-  vi.stubGlobal(
-    'fetch',
-    async (url: string, init: RequestInit) =>
-      new Response(
-        JSON.stringify(
-          init.method === 'POST'
-            ? { invitationToken: 'one-time-token' }
-            : url.endsWith('/users')
-              ? { items: [] }
-              : { version: 'test' },
-        ),
-      ),
-  );
-  mount(<AdminPage />);
-  fireEvent.click(screen.getByRole('button', { name: 'Nutzer einladen' }));
-  fireEvent.change(screen.getByLabelText('Benutzername'), {
-    target: { value: 'guest' },
-  });
-  fireEvent.change(screen.getByLabelText('Anzeigename'), {
-    target: { value: 'Gast' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Einladung erstellen' }));
-  const input = (await screen.findByRole('textbox', {
-    name: 'Einladungslink',
-  })) as HTMLInputElement;
-  fireEvent.click(screen.getByRole('button', { name: 'Link kopieren' }));
-  await screen.findByText('Link markiert. Bitte manuell kopieren.');
-  expect(input).toHaveFocus();
-  expect(input.selectionStart).toBe(0);
-  expect(input.selectionEnd).toBe(input.value.length);
-  expect(screen.queryByRole('button', { name: 'Kopiert' })).not.toBeInTheDocument();
-});
 it.each([
   { count: 0, value: undefined, expected: 'Keine Daten' },
-  { count: 1, value: '0.0', expected: '0,0' },
-  { count: 2, value: '0.0', expected: '0,0' },
+  { count: 1, value: '0.0', expected: '0' },
+  { count: 2, value: '0.0', expected: '0' },
 ])(
   'shows sum $count with separate missing data and measured zero',
   async ({ count, value, expected }) => {
@@ -230,7 +195,7 @@ it('summarizes nested filters and removes one condition without flattening AND/O
       { fieldId: 'favorite', operator: 'eq', value: true },
     ],
   });
-  expect(screen.getByRole('button', { name: 'Feldfilter entfernen' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Filter zurücksetzen' })).toBeVisible();
 });
 it('exports only selected liquid IDs from the selection bar', async () => {
   let selection: any;
@@ -275,12 +240,11 @@ it('exports only selected liquid IDs from the selection bar', async () => {
     }),
   );
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-  mount(<LiquidsPage query="" />);
+  mount(<LiquidsPage query="?view=list" />);
   await screen.findByRole('button', { name: 'Eins' });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Eins auswählen' }));
   fireEvent.click(screen.getByRole('button', { name: 'Auswahl exportieren' }));
   await waitFor(() => expect(selection).toEqual({ ids: ['one'] }));
-  expect(screen.getByRole('button', { name: 'Gesamte Sammlung exportieren' })).toBeVisible();
 });
 
 it.each(
@@ -318,7 +282,7 @@ it.each(
     expect(requested).toEqual(filters);
     expect(route).toBe('');
     expect(screen.getByRole('button', { name: 'Ungültigen Feldfilter entfernen' })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Filter aktiv' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter (1)' }));
     const dialog = screen.getByRole('dialog', { name: 'Filter' });
     expect(
       within(dialog).getByText('Ungültiger Feldfilter. Bitte entfernen und neu anlegen.'),

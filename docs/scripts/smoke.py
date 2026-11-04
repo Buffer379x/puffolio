@@ -64,7 +64,7 @@ def main():
         assert client.request(api+f'/fields/{saved["tagFieldId"]}/tags')['items']==saved['tags']
         image=client.request(api+'/media/'+saved['mediaId'])
         assert hashlib.sha256(image).hexdigest()==saved['imageSHA256']
-        Client(args.url).request(api+'/media/'+saved['mediaId'],status=401)
+        Client(args.url).request(api+'/media/'+saved['mediaId']+'?variant=master',status=401)
         assert client.request(api+'/preferences')==saved['preferences']
         assert client.request(api+'/dashboard')==saved['dashboard']
         assert client.request(api+'/dashboard/query','POST',{'widgets':saved['dashboard']['widgets']})==saved['dashboardResult']
@@ -83,12 +83,12 @@ def main():
     for type_,config in field_specs:
         fields[type_]=client.request(api+'/fields','POST',{'label':'Smoke '+type_,'type':type_,'required':False,'visibility':{'form':True,'detail':True,'list':True,'grid':True},'config':config})
     tag=client.request(api+f'/fields/{fields["tags"]["id"]}/tags','POST',{'name':'Prüfung','paletteId':'teal'})
-    # A synthetic 4:3 PNG generated from stdlib, never a user's uploaded image.
+    # A synthetic landscape PNG generated from stdlib, never a user's uploaded image.
     import struct,zlib
     def chunk(t,d):return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
     png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',4,3,8,2,0,0,0))+chunk(b'IDAT',zlib.compress((b'\0'+b'\x80\xc0\x40'*4)*3))+chunk(b'IEND',b'')
     upload=client.upload(api+'/media','synthetic.png',png,'image/png')
-    media=client.request(api+f'/media/{upload["id"]}/crop','POST',{'x':0,'y':0,'width':1,'height':1})
+    media=client.request(api+f'/media/{upload["id"]}/crop','POST',{'x':0.125,'y':0,'width':0.75,'height':1})
     assert media['id']!=upload['id']
     values={'text':'Wörtlich %_ Äpfel','longtext':'Notiz\nZweite Zeile','rating':4,'image':media['id'],'tags':[tag['id']],'color':'#AABBCC','date':'2028-02-29','number':'0.000','select':fields['select']['config']['options'][0]['id'],'boolean':False}
     typed={fields[t]['id']:{'type':t,'value':v} for t,v in values.items()}
@@ -98,13 +98,14 @@ def main():
     client.request(api+f'/liquids/{liquid["id"]}','PATCH',{'name':'Stale','version':liquid['version']},status=409)
     page=client.request(api+'/liquids?search=%25_&favorite=true&page=1&pageSize=24')
     assert len(page['items'])==1 and page['items'][0]['id']==liquid['id']
-    other=client.request(api+'/admin/users','POST',{'username':'smoke-other','displayName':'Other','role':'user'})
-    second=Client(args.url)
-    second_me=second.request(api+'/auth/invite','POST',{'token':other['invitationToken'],'password':secrets.token_urlsafe(24)})
-    second.csrf=second_me['csrfToken']
-    second.request(api+f'/liquids/{liquid["id"]}',status=404)
-    second.request(api+f'/media/{media["id"]}',status=404)
-    assert not second.request(api+'/liquids')['items']
+    visitor=Client(args.url)
+    assert visitor.request(api+'/liquids')['total']==1, 'Visitors read the collection.'
+    assert visitor.request(api+f'/media/{media["id"]}?variant=thumbnail')
+    visitor.request(api+f'/media/{media["id"]}?variant=master',status=401)
+    visitor.request(api+'/me',status=401)
+    visitor.request(api+'/liquids?trash=true',status=401)
+    visitor.request(api+'/liquids','POST',{'name':'Anonymous'},status=401)
+    visitor.request(api+f'/liquids/{liquid["id"]}','PATCH',{'name':'Anonymous','version':updated['version']},status=401)
     client.request(api+f'/liquids/{liquid["id"]}','DELETE',{'version':updated['version']})
     trashed=client.request(api+'/liquids?trash=true')['items'][0]
     restored=client.request(api+f'/liquids/{liquid["id"]}/restore','POST',{'version':trashed['version']})
@@ -113,7 +114,7 @@ def main():
     preferences.update({'theme':'dark','timezone':'Europe/Berlin','view':'list','images':False,
                         'listFields':[fields['date']['id'],fields['number']['id']],
                         'gridFields':[fields['rating']['id']],
-                        'roles':{'image':fields['image']['id'],'quantity':fields['number']['id']}})
+                        'roles':{'image':fields['image']['id'],'purchase':fields['date']['id']},'shelfLifeMonths':60})
     client.request(api+'/preferences','PUT',preferences)
     layout=client.request(api+'/dashboard')
     widgets=[{'id':'smoke-count','type':'count','title':'Persisted smoke count','size':'medium'},
@@ -146,5 +147,5 @@ def main():
                'liquidCount':2,'fieldCount':len(client.request(api+'/fields')['items']),
                'preferences':preferences,'dashboard':dashboard,'dashboardResult':dashboard_result}
         state_path=Path(args.state_file);state_path.write_text(json.dumps(saved));state_path.chmod(0o600)
-    print(json.dumps({'status':'PASS','fields':10,'checks':['health','setup','typed-values','crop-revision','patch-preservation','version-conflict','literal-search','two-user-isolation','trash-restore','collection-roundtrip','nondefault-preferences-dashboard','instance-backup']}))
+    print(json.dumps({'status':'PASS','fields':10,'checks':['health','setup','typed-values','crop-revision','patch-preservation','version-conflict','literal-search','visitor-read-only','trash-restore','collection-roundtrip','nondefault-preferences-dashboard','instance-backup']}))
 if __name__=='__main__':main()

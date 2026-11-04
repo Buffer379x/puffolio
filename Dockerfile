@@ -17,11 +17,11 @@ COPY web/embed.go web/embed.go
 COPY --from=frontend /src/web/dist/ web/dist/
 ARG TARGETOS
 ARG TARGETARCH
-ARG VERSION=0.1.0
+ARG VERSION=dev
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/puffolio ./cmd/puffolio
 
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329
-ARG VERSION=0.1.0
+ARG VERSION=dev
 LABEL org.opencontainers.image.title="Puffolio" \
       org.opencontainers.image.description="Selbst gehostete Liquidverwaltung" \
       org.opencontainers.image.source="https://github.com/Buffer379x/puffolio" \
@@ -29,7 +29,6 @@ LABEL org.opencontainers.image.title="Puffolio" \
       org.opencontainers.image.licenses="MIT"
 ENV PUFFOLIO_DATA_DIR=/data \
     PUFFOLIO_HTTP_ADDR=:8080 \
-    PUFFOLIO_BASE_URL=http://localhost:8787 \
     PUFFOLIO_COOKIE_SECURE=false \
     TZ=Europe/Berlin
 COPY --from=backend /out/puffolio /puffolio

@@ -1,10 +1,6 @@
-import { test, expect, addLiquid } from './fixtures';
+import { test, expect } from './fixtures';
 import { randomUUID } from 'node:crypto';
-test('protected setup, real login and invitation isolate two collections', async ({
-  server,
-  browser,
-  playwright,
-}) => {
+test('setup is protected by the one-time code', async ({ server, browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
   const password = 'Test-' + randomUUID();
@@ -18,29 +14,6 @@ test('protected setup, real login and invitation isolate two collections', async
   await page.getByLabel('Einrichtungscode').fill(server.code);
   await page.getByRole('button', { name: 'Einrichten', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-  const me = await (await context.request.get(server.url + '/api/v1/me')).json();
-  const invite = await context.request.post(server.url + '/api/v1/admin/users', {
-    headers: { Origin: server.url, 'X-CSRF-Token': me.csrfToken },
-    data: { username: 'second', displayName: 'Zweites Konto', role: 'user' },
-  });
-  expect(invite.status()).toBe(201);
-  const token = (await invite.json()).invitationToken;
-  const other = await browser.newContext();
-  const p = await other.newPage();
-  await p.goto(server.url + '/invite?token=' + token);
-  await p.getByLabel('Anzeigename').fill('Zweites Konto');
-  await p.getByLabel('Passwort', { exact: true }).fill(password);
-  await p.getByRole('button', { name: 'Einladung annehmen', exact: true }).click();
-  await expect(p.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
-  const mine = await context.request.get(server.url + '/api/v1/fields');
-  const foreignId = (await mine.json()).items[0].id;
-  expect(
-    (await other.request.get(server.url + '/api/v1/fields/' + foreignId + '/usage')).status(),
-  ).toBe(404);
-  expect(
-    (await (await other.request.get(server.url + '/api/v1/fields')).json()).items,
-  ).toHaveLength(0);
-  await other.close();
   await context.close();
 });
 test('expired cookie login preserves a liquid draft', async ({ app }) => {
