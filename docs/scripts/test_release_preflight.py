@@ -197,6 +197,12 @@ class TransportAndWorkflow(unittest.TestCase):
         self.assertIn('tags: ghcr.io/buffer379x/puffolio:${{ inputs.version }}', publish)
         self.assertIn('${{ steps.build.outputs.digest || steps.version.outputs.digest }}', publish)
 
+    def test_latest_moves_only_after_the_release_exists(self):
+        workflow = (Path(__file__).resolve().parents[2] / '.github/workflows/release.yml').read_text()
+        before, final = workflow.split('  github-release:', 1)
+        self.assertNotIn(':latest', before)
+        self.assertLess(final.index('gh release create'), final.index(':latest'))
+
 
 if __name__ == '__main__':
     unittest.main()
