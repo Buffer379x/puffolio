@@ -385,7 +385,12 @@ export function Dialog({
       el.close();
       dialogDepth--;
       if (!dialogDepth) document.body.classList.remove('dialog-open');
-      if (previous?.isConnected && !previous.closest('[inert]')) previous.focus();
+      if (previous?.isConnected && !previous.closest('[inert]')) {
+        // Safari leaves a clicked button unfocused and focus lands on the nearest
+        // scroll region. Refocusing that would draw a ring around the whole list.
+        if (previous.matches('a[href],button,input,select,textarea,summary')) previous.focus();
+        else if (document.activeElement === previous) previous.blur();
+      }
     };
   }, [open]);
   if (!open) return null;

@@ -32,13 +32,22 @@ type TagCount struct {
 	PaletteID string `json:"paletteId"`
 	Count     int    `json:"count"`
 }
+
+// Segment is one part of a chart. PaletteID carries the colour the owner chose.
+type Segment struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Count     int    `json:"count"`
+	PaletteID string `json:"paletteId,omitempty"`
+}
 type Result struct {
-	ID    string           `json:"id"`
-	Value string           `json:"value,omitempty"`
-	Count *int             `json:"count,omitempty"`
-	Items []liquids.Liquid `json:"items,omitempty"`
-	Tags  []TagCount       `json:"tags,omitempty"`
-	Error string           `json:"error,omitempty"`
+	ID       string           `json:"id"`
+	Value    string           `json:"value,omitempty"`
+	Count    *int             `json:"count,omitempty"`
+	Items    []liquids.Liquid `json:"items,omitempty"`
+	Tags     []TagCount       `json:"tags,omitempty"`
+	Segments []Segment        `json:"segments,omitempty"`
+	Error    string           `json:"error,omitempty"`
 }
 
 func Validate(widgets []Widget) error {
@@ -57,7 +66,7 @@ func Validate(widgets []Widget) error {
 		}
 		seen[w.ID] = true
 		switch w.Type {
-		case "count", "sum", "favorites", "average", "recent", "low", "tags", "dates", "expired", "expiring":
+		case "count", "sum", "favorites", "average", "recent", "low", "tags", "dates", "expired", "expiring", "donut", "ratings", "shelfStatus", "timeline", "top":
 		default:
 			return fault.Validation("Unbekannter Widgettyp")
 		}
@@ -132,7 +141,7 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 		return res, fault.Validation("Ungültiges Limit")
 	}
 	var d fields.Definition
-	if w.Type != "count" && w.Type != "favorites" && w.Type != "recent" && w.Type != "expired" && w.Type != "expiring" {
+	if w.Type != "count" && w.Type != "favorites" && w.Type != "recent" && w.Type != "expired" && w.Type != "expiring" && w.Type != "shelfStatus" {
 		var ok bool
 		d, ok = dm[w.FieldID]
 		if !ok || d.Archived {
@@ -184,6 +193,14 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 		}
 		o.Shelf.Apply(res.Items)
 		return res, nil
+	case "donut":
+		return distribution(ctx, db, res, d, where, args, limit)
+	case "ratings":
+		return ratingColumns(ctx, db, res, d, where, args)
+	case "shelfStatus":
+		return shelfStatus(ctx, db, res, where, args, o)
+	case "timeline":
+		return timeline(ctx, db, res, d, where, args, o)
 	case "count", "favorites":
 		if w.Type == "favorites" {
 			where += " AND l.favorite=1"
@@ -257,12 +274,20 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 		e = rows.Err()
 		rows.Close()
 		return res, e
-	case "recent", "low", "dates":
+	case "recent", "low", "dates", "top":
 		source := "liquids l"
 		if w.Type != "recent" {
 			source += " JOIN field_values window_values ON window_values.collection_id=l.collection_id AND window_values.liquid_id=l.id"
 		}
 		sort := "l.created_at DESC,l.id"
+		if w.Type == "top" {
+			if d.Type != "rating" && d.Type != "number" {
+				return res, fault.Validation("Bewertungs- oder Zahlenfeld erforderlich")
+			}
+			where += " AND window_values.field_id=? AND window_values.value_number IS NOT NULL"
+			args = append(args, d.ID)
+			sort = "window_values.value_number DESC,l.created_at DESC,l.id"
+		}
 		if w.Type == "low" {
 			if d.Type != "number" {
 				return res, fault.Validation("Zahlenfeld erforderlich")

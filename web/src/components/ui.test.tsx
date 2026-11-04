@@ -96,3 +96,20 @@ it('cancels only the nested crop and retains the parent draft, modal and crop op
   expect(screen.getByLabelText('Liquidname')).toHaveValue('Erhaltener Entwurf');
   expect(opener).toHaveFocus();
 });
+
+it('does not put a focus ring on a scroll region when a dialog closes', () => {
+  HTMLDialogElement.prototype.showModal ??= function () {};
+  HTMLDialogElement.prototype.close ??= function () {};
+  const scroller = document.createElement('div');
+  scroller.tabIndex = 0;
+  document.body.append(scroller);
+  scroller.focus();
+  const view = render(
+    <Dialog title="Detail" onClose={() => {}}>
+      <p>Inhalt</p>
+    </Dialog>,
+  );
+  view.unmount();
+  expect(document.activeElement).not.toBe(scroller);
+  scroller.remove();
+});

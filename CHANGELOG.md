@@ -1,5 +1,14 @@
 # Änderungen
 
+## 0.3.0 – 2026-11-04
+
+- Neue Dashboard-Widgets: Kreisdiagramm (Tags, Auswahl, Text, Bewertung, Ja/Nein),
+  Bewertungsverteilung, Käufe pro Monat, Haltbarkeit im Überblick und Bestbewertet.
+- Jede Dashboard-Reihe füllt die volle Breite, unabhängig von der Mischung der Größen.
+- Behoben: grüner Rahmen um die Liste nach dem Schließen eines Liquids (Safari).
+- Der doppelte Button „Abmelden“ in den Einstellungen ist entfernt.
+- Der Release-Workflow setzt `latest` nach bestandenen Prüfungen auf die neue Version.
+
 ## 0.2.0 – 2026-11-04
 
 **Geändertes Modell**

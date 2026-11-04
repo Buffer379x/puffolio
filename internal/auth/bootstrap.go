@@ -88,11 +88,13 @@ func defaultWidgets(defs []fields.Definition, roles map[string]string) []map[str
 	}
 	out = append(out, widget("recent", "Zuletzt hinzugefügt", "wide", map[string]any{"limit": 5}))
 	if tags := first("tags"); tags != nil {
-		out = append(out, widget("tags", tags.Label, "medium", map[string]any{"fieldId": tags.ID, "limit": 5}))
+		out = append(out, widget("donut", tags.Label, "medium", map[string]any{"fieldId": tags.ID, "limit": 10}))
 	}
 	if purchase != "" {
 		out = append(out, widget("dates", "Zuletzt gekauft", "wide", map[string]any{"fieldId": purchase, "limit": 5, "window": "past"}))
 		out = append(out, widget("expiring", "Läuft bald ab", "medium", map[string]any{"limit": 5}))
+		out = append(out, widget("timeline", "Käufe pro Monat", "wide", map[string]any{"fieldId": purchase}))
+		out = append(out, widget("shelfStatus", "Haltbarkeit", "medium", nil))
 	}
 	return out
 }

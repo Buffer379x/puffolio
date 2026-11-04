@@ -77,7 +77,7 @@ docker run --rm --name "$restore_container" "${runtime[@]}" \
 start "$qa_dir/restored"
 sudo python3 docs/scripts/smoke.py --url http://127.0.0.1:8788 --verify-state "$qa_dir/state.json"
 stop_cleanly
-# Real upgrade: data written by the previous published image, read by this one.
+# Real upgrade: data written by the first published image, read by this one.
 previous='ghcr.io/buffer379x/puffolio@sha256:e4f9d8a2ab11e5e853670da5a0b7609474ef6428ffe9549e440e3d37f37f722d'
 containers+=("$container")
 docker run --detach --name "$container" "${runtime[@]}" \
