@@ -104,7 +104,7 @@ neueres Schema wird beim Start abgelehnt. Rollback benötigt sowohl das alte
 Image als auch ein dazu passendes Backup; ein altes Binary darf nicht einfach
 auf eine neu migrierte Datenbank angewendet werden.
 
-Die Version ist im Image und im Unraid-Template fest eingetragen und wird nie
-stillschweigend überschrieben. Für ein Update die neue Version aus dem Release
+Die Version ist in `compose.yaml` und im Unraid-Template fest eingetragen und wird
+nie stillschweigend überschrieben. Zusätzlich zeigt `latest` auf den neuesten Release. Für ein Update die neue Version aus dem Release
 übernehmen: `compose.yaml` ersetzen beziehungsweise in Unraid den Image-Tag ändern.
 Die Release-Hinweise nennen, was sich für bestehende Installationen ändert.

@@ -27,7 +27,7 @@ gh run watch --repo Buffer379x/puffolio
 `source_sha` muss der aktuelle Stand von `main` sein. Der Workflow führt die vollständige CI aus,
 baut das Multiarch-Image, signiert die Herkunft, startet das Image anonym auf beiden
 Architekturen samt Upgrade- und Restore-Prüfung, scannt es und erstellt erst danach Tag und
-Release. Ein erneuter Lauf baut ein vorhandenes Image nicht neu, sondern prüft es.
+Release. Zuletzt zeigt der Tag `latest` auf das neue Image. Ein erneuter Lauf baut ein vorhandenes Image nicht neu, sondern prüft es.
 
 ## Wenn der letzte Schritt scheitert
 
@@ -42,4 +42,10 @@ gh release create vX.Y.Z assets/* --repo Buffer379x/puffolio --target SOURCE_SHA
   --title 'Puffolio X.Y.Z' --notes-file docs/release-X.Y.Z.md --latest
 ```
 
-Nichts daran neu bauen: Das Image ist bereits veröffentlicht und signiert.
+Nichts daran neu bauen: Das Image ist bereits veröffentlicht und signiert. `latest` wird danach
+von Hand nachgezogen (Token mit `write:packages`, bei `docker login ghcr.io` angemeldet):
+
+```sh
+docker buildx imagetools create --tag "ghcr.io/buffer379x/puffolio:latest" \
+  "ghcr.io/buffer379x/puffolio@INDEX_DIGEST"
+```

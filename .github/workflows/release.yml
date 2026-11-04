@@ -240,6 +240,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      packages: write
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: ${{ inputs.source_sha }}
@@ -279,3 +280,14 @@ jobs:
           gh release create "v$RELEASE_VERSION" work/release-assets/* \
             --repo Buffer379x/puffolio --target "$SOURCE_SHA" --title "Puffolio $RELEASE_VERSION" \
             --notes-file "docs/release-$RELEASE_VERSION.md" --latest
+      # Last on purpose: latest only ever names an image that passed every gate.
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Move latest to the released image
+        run: |
+          image=ghcr.io/buffer379x/puffolio
+          docker buildx imagetools create --tag "${image}:latest" "${image}@${INDEX_DIGEST}"
+          test "$(docker buildx imagetools inspect "${image}:latest" --format '{{.Manifest.Digest}}')" = "$INDEX_DIGEST"
