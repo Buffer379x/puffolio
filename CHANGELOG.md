@@ -1,5 +1,22 @@
 # Änderungen
 
+## 0.4.0 – 2026-11-05
+
+**Datenbankschema ändert sich.** Die Migration läuft beim ersten Start. Vorher eine
+Instanzsicherung anlegen; eine migrierte Datenbank startet nicht mehr mit 0.3.0.
+
+- 32 statt 12 Tagfarben. Bestehende Tags und Flaschenfarben bleiben unverändert.
+- Kacheln: Alle Karten einer Ansicht zeigen dieselben Zeilen in Feldreihenfolge, leere Felder
+  zeigen „—“. Der Name belegt immer zwei Zeilen und wird danach mit „…“ gekürzt. Das gilt auch für
+  „Zuletzt hinzugefügt“.
+- Einstellungen → Felder zeigt eine Kachelvorschau mit der Reihenfolge.
+- Bearbeiten in der Kachel nur noch als Icon.
+- Listen-Widgets zeigen frei 1 bis 10 Einträge statt 3, 5 oder 10.
+- Kennzahl-Widgets tragen dieselbe Überschrift wie alle anderen, die erste Karte ist nicht mehr
+  eingefärbt.
+- Das Kreisdiagramm nutzt die Höhe des Widgets.
+- Sicherungen und Exporte älterer Versionen lassen sich weiter einspielen.
+
 ## 0.3.0 – 2026-11-04
 
 - Neue Dashboard-Widgets: Kreisdiagramm (Tags, Auswahl, Text, Bewertung, Ja/Nein),

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Puffolio API",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Same-origin. One administrator maintains the collection; read routes marked with an empty security requirement are public. Trash and media variant=master always require the session. UTC event timestamps; calendar dates YYYY-MM-DD; numbers are exact canonical decimal strings. Cookie sessions:7-day idle/30-day absolute. Mutation CSRF+Origin required. New required fields apply only to newly created liquids via requiredFrom cutoff. Field PATCH merges top-level properties; liquid PATCH merges submitted value keys, null removes. Import defaults preserve archived historical options."
   },
   "servers": [
@@ -6162,16 +6162,36 @@
         "type": "string",
         "enum": [
           "lime",
+          "pistachio",
+          "olive",
+          "moss",
           "green",
+          "mint",
+          "jade",
           "teal",
+          "aqua",
           "cyan",
+          "sky",
+          "ice",
           "blue",
+          "cornflower",
+          "periwinkle",
           "indigo",
+          "lavender",
           "violet",
+          "orchid",
           "pink",
+          "magenta",
+          "rose",
+          "raspberry",
           "red",
+          "coral",
+          "apricot",
           "orange",
+          "tangerine",
           "amber",
+          "honey",
+          "sand",
           "slate"
         ]
       },
@@ -6848,11 +6868,9 @@
             "format": "uuid"
           },
           "limit": {
-            "enum": [
-              3,
-              5,
-              10
-            ]
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
           },
           "threshold": {
             "type": "string"

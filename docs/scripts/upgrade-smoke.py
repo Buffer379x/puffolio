@@ -38,13 +38,17 @@ def seed(url, code, state):
     values = {fields['Bild']['id']: {'type': 'image', 'value': media['id']},
               fields['Menge']['id']: {'type': 'number', 'value': '60.0'},
               fields['Kaufdatum']['id']: {'type': 'date', 'value': '2025-01-01'}}
+    tag_field = next(f for f in fields.values() if f['type'] == 'tags')
+    tag = admin.request(f'{API}/fields/{tag_field["id"]}/tags', 'POST', {'name': 'Aus der Vorversion', 'paletteId': 'pink'})
+    values[tag_field['id']] = {'type': 'tags', 'value': [tag['id']]}
     liquid = admin.request(API + '/liquids', 'POST', {'name': 'Aus der Vorversion', 'favorite': True, 'values': values})
     invited = admin.request(API + '/admin/users', 'POST', {'username': 'upgrade-other', 'displayName': 'Other', 'role': 'user'})
     other_password = secrets.token_urlsafe(24)
     Client(url).request(API + '/auth/invite', 'POST', {'token': invited['invitationToken'], 'password': other_password})
     state.write_text(json.dumps({'password': password, 'otherPassword': other_password, 'liquid': liquid,
                                  'mediaId': media['id'], 'dashboard': admin.request(API + '/dashboard'),
-                                 'purchaseField': fields['Kaufdatum']['id'], 'fieldCount': len(fields)}))
+                                 'purchaseField': fields['Kaufdatum']['id'], 'fieldCount': len(fields),
+                                 'tagField': tag_field['id'], 'tag': tag}))
     state.chmod(0o600)
     print(json.dumps({'status': 'PASS', 'mode': 'seeded-previous-release'}))
 
@@ -67,6 +71,14 @@ def verify(url, state):
     assert len(admin.request(API + '/fields')['items']) == saved['fieldCount'], 'Fields survive the upgrade'
     assert admin.request(API + '/dashboard')['widgets'] == saved['dashboard']['widgets'], 'Dashboard survives the upgrade'
 
+    tags_url = f'{API}/fields/{saved["tagField"]}/tags'
+    assert admin.request(tags_url)['items'] == [saved['tag']], 'Tags survive the rebuild of their table'
+    recolored = admin.request(f'{tags_url}/{saved["tag"]["id"]}', 'PATCH', {
+        'name': saved['tag']['name'], 'paletteId': 'mint', 'version': saved['tag']['version']})
+    assert recolored['paletteId'] == 'mint', 'The added colours can be used'
+    assigned = admin.request(API + '/liquids/' + saved['liquid']['id'])['values'][saved['tagField']]['value']
+    assert assigned == [saved['tag']['id']], 'Tag assignments survive the rebuild and the new colour'
+
     preferences = admin.request(API + '/preferences')
     assert preferences['shelfLifeMonths'] == 0
     preferences['shelfLifeMonths'] = 600
@@ -84,7 +96,7 @@ def verify(url, state):
     assert admin.upload(API + '/imports/preview', 'puffolio.zip', archive, 'application/zip')['counts']['liquids'] == 1
     print(json.dumps({'status': 'PASS', 'mode': 'upgraded', 'checks': [
         'visitor-read', 'values-kept', 'legacy-thumbnail', 'second-account-locked', 'admin-login', 'fields-dashboard-kept',
-        'shelf-life-configurable', 'square-recrop', 'export-importable']}))
+        'tags-kept', 'new-palette-usable', 'shelf-life-configurable', 'square-recrop', 'export-importable']}))
 
 
 def main():

@@ -65,3 +65,16 @@ test('409 keeps visible draft and hidden field values survive subsequent edit', 
   expect(saved.values[text.id].value).toBe('Versteckt');
   expect(saved.values[quantity.id].value).toBe('2.5');
 });
+test('card offers editing as an icon with a full name and target', async ({ app }) => {
+  await addLiquid(app, 'Testliquid');
+  await goto(app, '/liquids?view=grid');
+  const edit = app.page.getByRole('button', { name: 'Testliquid bearbeiten', exact: true });
+  await expect(edit).toHaveText('');
+  const box = (await edit.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  await edit.click();
+  await expect(
+    app.page.getByRole('dialog', { name: 'Liquid bearbeiten', exact: true }),
+  ).toBeVisible();
+});

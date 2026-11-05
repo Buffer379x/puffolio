@@ -159,3 +159,75 @@ test('typed table values stay unbroken, actions align and bounded scrolling reac
     }
   }
 });
+test('card rows line up across a row, whatever the name and values', async ({ app }) => {
+  const defs = await fields(app);
+  const byType = (type: string) => defs.find((f) => f.type === type);
+  const purchase = defs.find((f) => f.label === 'Kaufdatum');
+  const amount = await addField(app, 'Menge', 'number');
+  const tagField = byType('tags');
+  const tagIds: string[] = [];
+  for (const name of ['Erdbeere', 'Vanillecreme', 'Waldmeister', 'Pfefferminze', 'Tabak'])
+    tagIds.push(
+      (await app.write(`/fields/${tagField.id}/tags`, 'POST', { name, paletteId: 'teal' })).id,
+    );
+  const complete = (tagged: string[]) => ({
+    [byType('text').id]: { type: 'text', value: 'Hersteller' },
+    [byType('rating').id]: { type: 'rating', value: 4 },
+    [purchase.id]: { type: 'date', value: new Date().toISOString().slice(0, 10) },
+    [tagField.id]: { type: 'tags', value: tagged },
+    [amount.id]: { type: 'number', value: '3' },
+  });
+  const longName = 'Sehr langer Name '.repeat(7).trim();
+  const unbroken = 'Donaudampfschifffahrtsgesellschaft'.repeat(3);
+  await addLiquid(app, 'Kurz', complete(tagIds.slice(0, 1)));
+  await addLiquid(app, longName, complete(tagIds));
+  await addLiquid(app, unbroken, {
+    ...complete(tagIds.slice(0, 2)),
+    [byType('text').id]: { type: 'text', value: 'Ein sehr langer Hersteller '.repeat(6).trim() },
+  });
+  await addLiquid(app, 'Ohne Werte');
+  await goto(app, '/liquids?view=grid');
+  await expect(app.page.locator('.item-card')).toHaveCount(4);
+  const cards = await app.page.locator('.item-card').evaluateAll((list) =>
+    list.map((card) => {
+      const name = card.querySelector<HTMLElement>('.name-button span')!;
+      const box = card.getBoundingClientRect();
+      return {
+        top: box.top,
+        height: box.height,
+        rowTops: [...card.querySelector('.item-card-content')!.children].map(
+          (row) => row.getBoundingClientRect().top,
+        ),
+        nameHeight: name.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(name).lineHeight),
+        clamped: name.scrollHeight > name.clientHeight,
+        insideCard: [...card.querySelectorAll('.item-card-content > *')].every(
+          (row) => row.getBoundingClientRect().right <= box.right + 0.5,
+        ),
+      };
+    }),
+  );
+  const rows = Map.groupBy(cards, (card) => Math.round(card.top));
+  expect([...rows.values()].some((row) => row.length > 1)).toBe(true);
+  for (const row of rows.values()) {
+    for (const card of row) {
+      expect(card.rowTops.length).toBe(row[0].rowTops.length);
+      card.rowTops.forEach((top, i) => expect(Math.abs(top - row[0].rowTops[i])).toBeLessThan(1));
+      expect(Math.abs(card.height - row[0].height)).toBeLessThan(1);
+    }
+  }
+  for (const card of cards) {
+    expect(Math.abs(card.nameHeight - 2 * card.lineHeight)).toBeLessThan(1);
+    expect(card.insideCard).toBe(true);
+  }
+  expect(cards.filter((card) => card.clamped).length).toBeGreaterThanOrEqual(2);
+  const fullName = app.page.getByRole('button', { name: longName, exact: true });
+  await expect(fullName).toHaveCount(1);
+  await expect(fullName.locator('span')).toHaveAttribute('title', longName);
+  const empty = app.page.locator('.item-card').filter({ hasText: 'Ohne Werte' });
+  await expect(empty.locator('.card-data')).toContainText('—');
+  await expect(empty.locator('.card-rating-row')).toContainText('—');
+  await expect(empty.locator('.card-subtitle')).toHaveText('—');
+  const overflow = await app.page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});

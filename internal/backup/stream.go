@@ -160,7 +160,7 @@ func (a *checkedArchive) readCollection(visit func(liquids.Liquid) error) (Colle
 	if e = d.Decode(new(any)); e != io.EOF {
 		return c, fault.Validation("Zusätzliche Sammlungsdaten")
 	}
-	if c.SchemaVersion != store.SchemaVersion || len(c.Fields) > 100 || len(c.Media) > 500000 || !seen["liquids"] {
+	if c.SchemaVersion != a.manifest.SchemaVersion || len(c.Fields) > 100 || len(c.Media) > 500000 || !seen["liquids"] {
 		return c, fault.Validation("Ungültige Sammlungsstruktur")
 	}
 	return c, nil

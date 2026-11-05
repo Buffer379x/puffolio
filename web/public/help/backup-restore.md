@@ -13,7 +13,9 @@ bestätigen. Er importiert Puffolio-Exporte, keine beliebigen CSV-Dateien.
 IDs werden auf die Zielsammlung abgebildet; ein Import überschreibt nicht
 stillschweigend bestehende Liquids. Die Webgrenzen betragen 100 MiB entpackte
 Daten, 10.000 Archiveinträge und 5.000 Bilder. Ungültige Archivpfade und unbekannte
-Schemaversionen werden abgelehnt.
+Schemaversionen werden abgelehnt. Exporte und Instanzsicherungen älterer Versionen
+lassen sich weiter einspielen, umgekehrt nicht: Eine ältere Version lehnt das Archiv
+einer neueren ab.
 
 Der Import fügt Daten hinzu und behält Pflichtregeln bei. Würden vorhandene
 oder importierte Liquids dadurch Pflichtwerte vermissen, wird der Import
@@ -65,13 +67,15 @@ sudo chmod 700 recovery recovery/restored
 docker run --rm --user 99:100 --read-only --cap-drop ALL \
   --security-opt no-new-privileges \
   --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
-  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.3.0 \
+  -v "$PWD/recovery:/restore" ghcr.io/buffer379x/puffolio:0.4.0 \
   restore --from /restore/puffolio-backup.zip --data-dir /restore/restored
 ```
 
 4. Der Restore prüft Manifest, sichere Pfade, Prüfsummen, Schema und
    Datenbankintegrität. Bestehende Ziele werden nicht überschrieben. Alte
    Sitzungen werden widerrufen; der Administrator meldet sich erneut an.
+   Die Sicherung einer älteren Version wird beim ersten Start automatisch
+   auf das aktuelle Schema gebracht.
 5. Die Bindung `/data` in Compose bzw. Unraid auf das wiederhergestellte
    Verzeichnis umstellen und mit dem passenden Image starten.
 6. Readiness, Anmeldung, Datum, Tags, Bilder einschließlich nachträglichem
@@ -94,3 +98,7 @@ Imageversion wählen und dieselbe Datenbindung verwenden. Ein unbekanntes
 neueres Schema wird beim Start abgelehnt. Rollback benötigt sowohl das alte
 Image als auch ein dazu passendes Backup; ein altes Binary darf nicht einfach
 auf eine neu migrierte Datenbank angewendet werden.
+
+Ein Schema-Update läuft beim Start in einer einzigen Transaktion: Es wird ganz
+oder gar nicht angewendet. Schlägt es fehl, startet Puffolio nicht, und die
+Datenbank bleibt unverändert auf dem alten Stand.

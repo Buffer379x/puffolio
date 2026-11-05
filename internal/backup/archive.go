@@ -409,7 +409,7 @@ func checkArchive(filename string, limits Limits) (a *checkedArchive, err error)
 	dec.DisallowUnknownFields()
 	e = dec.Decode(&a.manifest)
 	r.Close()
-	if e != nil || a.manifest.SchemaVersion != store.SchemaVersion || a.manifest.Kind != "collection" && a.manifest.Kind != "instance" {
+	if e != nil || !store.BackupSchemaSupported(a.manifest.SchemaVersion) || a.manifest.Kind != "collection" && a.manifest.Kind != "instance" {
 		return nil, fault.Validation("Unbekannte Archiv- oder Schemaversion")
 	}
 	if len(a.manifest.Files) != len(a.files)-1 {
@@ -519,7 +519,8 @@ func Restore(ctx context.Context, filename, dest string) (err error) {
 		return fmt.Errorf("restored database integrity check failed")
 	}
 	var version int
-	if e = db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); e != nil || version != store.SchemaVersion {
+	// An older database stays as it is here; store.Open migrates it at the next start.
+	if e = db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); e != nil || version != a.manifest.SchemaVersion {
 		return fmt.Errorf("unsupported database schema")
 	}
 	rows, e := db.QueryContext(ctx, "PRAGMA foreign_key_check")

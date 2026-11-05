@@ -144,7 +144,7 @@ export interface Widget {
   title: string;
   size: 'small' | 'medium' | 'wide';
   fieldId?: string;
-  limit?: 3 | 5 | 10;
+  limit?: number;
   threshold?: string;
   inclusive?: boolean;
   from?: string;

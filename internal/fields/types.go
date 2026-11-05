@@ -6,6 +6,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -75,14 +76,16 @@ var decimalPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)(\.[0-9]+)?$`)
 
 func UUID(s string) bool        { return uuidPattern.MatchString(s) }
 func Normalize(s string) string { return cases.Fold().String(norm.NFC.String(strings.TrimSpace(s))) }
-func ValidPalette(s string) bool {
-	for _, x := range []string{"lime", "green", "teal", "cyan", "blue", "indigo", "violet", "pink", "red", "orange", "amber", "slate"} {
-		if s == x {
-			return true
-		}
-	}
-	return false
+
+// PaletteIDs are the tag colours; migrations/002_palette.sql allows the same ones.
+var PaletteIDs = []string{
+	"lime", "pistachio", "olive", "moss", "green", "mint", "jade", "teal",
+	"aqua", "cyan", "sky", "ice", "blue", "cornflower", "periwinkle", "indigo",
+	"lavender", "violet", "orchid", "pink", "magenta", "rose", "raspberry", "red",
+	"coral", "apricot", "orange", "tangerine", "amber", "honey", "sand", "slate",
 }
+
+func ValidPalette(s string) bool { return slices.Contains(PaletteIDs, s) }
 func ParseNumber(s string, scale int) (int64, error) {
 	if scale < 0 || scale > 3 || !decimalPattern.MatchString(s) {
 		return 0, fmt.Errorf("Ungültige Zahl")

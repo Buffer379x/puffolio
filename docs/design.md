@@ -24,11 +24,13 @@ Tastatur und in beiden Farbschemata geprüft.
 | `Button`, `IconButton`, `SegmentedControl` | Einzige Bedienelemente; Primär nur für die Hauptaktion je Bereich |
 | `Icon` | Einziges Iconset, 24-px-Raster; keine Emoji |
 | `Panel`, `section-card` | Einzige Flächen für Inhalte |
-| `ItemCard` / `LiquidCard` | Kartenraster, das auch Tools nutzt; die ganze Karte öffnet das Detail, Leerwerte belegen keinen Platz |
+| `ItemCard` / `LiquidCard` | Kartenraster, das auch Tools nutzt; die ganze Karte öffnet das Detail; alle Karten einer Ansicht haben dieselben Zeilen in Feldreihenfolge, der Name reserviert zwei Zeilen, leere Werte zeigen „—“ |
+| `CardPreview` | Kachelvorschau in Einstellungen → Felder: echte Karte mit Beispielwerten, nicht bedienbar, daneben die Reihenfolge als Liste |
 | `LiquidImage` | Einziger Bildplatz: quadratisch, gefüllt, Thumbnail außer im Detail; ohne Foto Flasche in der Liquidfarbe |
 | `ShelfBar` | Haltbarkeit: Länge und Farbe aus dem Restanteil, Grün bis Rot, immer mit Text („80 %“, „Abgelaufen“) |
 | `Stars` | Lesende Bewertung; keine Bewertung ist „—“, nie null Sterne |
-| `DonutChart`, `ColumnChart`, `ShelfStatusChart` | Diagramme ohne Bibliothek: Legende mit Zahlen, Tabelle für Screenreader, Serienfarben aus `--series-*` |
+| `DonutChart`, `ColumnChart`, `ShelfStatusChart` | Diagramme ohne Bibliothek: Legende mit Zahlen, Tabelle für Screenreader, Serienfarben aus `--series-*`; der Ring füllt die Höhe des Widgets |
+| `PalettePicker` | Tagfarben: 32 Farben in acht Spalten, auf dem Smartphone vier; Tagtext immer `#20261D` |
 | `Dialog`, `Confirm` | Einzige Überlagerungen; mobil bildschirmfüllend für Liquidformulare |
 | `useToast` | Bestätigung ohne sichtbare Änderung sowie „Rückgängig“ |
 

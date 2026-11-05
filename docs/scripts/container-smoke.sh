@@ -94,6 +94,8 @@ stop_cleanly
 # Synthetic startup fixtures: schema states a published image cannot produce on demand.
 start "$qa_dir/fixtures/initial"
 stop_cleanly
+start "$qa_dir/fixtures/previous"
+stop_cleanly
 start "$qa_dir/fixtures/current"
 stop_cleanly
 expect_startup_failure "$qa_dir/fixtures/denied" 'not writable'
