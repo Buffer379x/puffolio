@@ -1,5 +1,5 @@
 import { createUUID } from '../../app/uuid';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../app/api';
 import { useApp, useAction, useDirty } from '../../app/state';
 import type { Field, FieldType, Scalar } from '../../app/types';
@@ -44,10 +44,12 @@ function FieldDialog({
   field,
   onClose,
   onSaved,
+  onDelete,
 }: {
   field?: Field;
   onClose: () => void;
   onSaved: () => void;
+  onDelete: (field: Field, values: number) => void;
 }) {
   const [draft, setDraft] = useState<Field>(() => structuredClone(field || blank()));
   const [policy, setPolicy] = useState('new');
@@ -79,6 +81,38 @@ function FieldDialog({
         onClose={close}
         footer={
           <>
+            {field && (
+              <div className="push-left modal-footer-side">
+                <Button
+                  disabled={a.busy || dirty}
+                  onClick={() =>
+                    void a.run(async () => {
+                      await api('/fields/' + field.id + '/archive', 'POST', {
+                        version: field.version,
+                        archived: !field.archived,
+                      });
+                      onSaved();
+                    })
+                  }
+                >
+                  {field.archived ? 'Aktivieren' : 'Archivieren'}
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={a.busy || dirty}
+                  onClick={() =>
+                    void a.run(async () => {
+                      const usage = await api<{ values: number }>(
+                        '/fields/' + field.id + '/usage',
+                      );
+                      onDelete(field, usage.values);
+                    })
+                  }
+                >
+                  Löschen
+                </Button>
+              </div>
+            )}
             <Button onClick={close}>Abbrechen</Button>
             <Button
               variant="primary"
@@ -381,6 +415,9 @@ function FieldDialog({
             </>
           )}
         </div>
+        {field && dirty && (
+          <p className="muted">Erst speichern oder verwerfen, dann archivieren oder löschen.</p>
+        )}
         <ErrorMessage error={a.error} />
       </Dialog>
       {confirm && (
@@ -543,6 +580,16 @@ export function FieldsSettings() {
   const [edit, setEdit] = useState<{ field?: Field }>();
   const [deletion, setDeletion] = useState<{ field: Field; values: number }>();
   const a = useAction();
+  const addButton = useRef<HTMLButtonElement>(null);
+  const focusAdd = useRef(false);
+  // After the warning has closed: the row that held the opener is gone, and the page behind an
+  // open dialog cannot take focus.
+  useEffect(() => {
+    if (!deletion && focusAdd.current) {
+      focusAdd.current = false;
+      addButton.current?.focus();
+    }
+  }, [deletion]);
   const done = () =>
     void a.run(async () => {
       await refresh();
@@ -559,114 +606,95 @@ export function FieldsSettings() {
     <>
       <div className="settings-section-heading">
         <h2>Felder</h2>
-        <Button variant="primary" onClick={() => setEdit({})}>
+        <Button ref={addButton} variant="primary" onClick={() => setEdit({})}>
           <Icon name="plus" />
           Feld hinzufügen
         </Button>
       </div>
       <ErrorMessage error={a.error} />
-      <div className="table-scroll" tabIndex={0} aria-label="Felder">
-        <table className="field-table">
-          <thead>
-            <tr>
-              <th>Feld</th>
-              {contexts.map(([key, label]) => (
-                <th className="check-col" key={key}>
-                  {label}
-                </th>
-              ))}
-              <th className="actions-column">Aktionen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fields.map((f, i) => (
-              <tr key={f.id} className={f.archived ? 'archived' : ''}>
-                <th scope="row">
-                  <div className="field-name">
-                    <span className="field-type-icon">
-                      <Icon name={typeIcons[f.type]} />
-                    </span>
-                    <div>
-                      <strong>{f.label}</strong>
-                      <span className="muted">
-                        {fieldTypes[f.type]}
-                        {f.archived ? ' · Archiviert' : ''}
-                        {f.required ? ' · Pflichtfeld' : ''}
-                      </span>
-                    </div>
-                  </div>
-                </th>
-                {contexts.map(([key, label]) => (
-                  <td className="check-col" key={key}>
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        aria-label={`${f.label}: ${label}`}
-                        checked={f.visibility[key]}
-                        disabled={a.busy || f.archived || (key === 'form' && f.required)}
-                        onChange={(e) =>
-                          void a.run(async () => {
-                            await api('/fields/' + f.id, 'PATCH', {
-                              version: f.version,
-                              visibility: { ...f.visibility, [key]: e.target.checked },
-                            });
-                            await refresh();
-                          })
-                        }
-                      />
-                    </label>
-                  </td>
+      <div className="fields-workspace">
+        <div className="fields-workspace-grid">
+          <div className="table-scroll" tabIndex={0} aria-label="Felder">
+            <table className="field-table">
+              <thead>
+                <tr>
+                  <th>Feld</th>
+                  {contexts.map(([key, label]) => (
+                    <th className="check-col" key={key}>
+                      {label}
+                    </th>
+                  ))}
+                  <th className="actions-column">Aktionen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fields.map((f, i) => (
+                  <tr key={f.id} className={f.archived ? 'archived' : ''}>
+                    <th scope="row">
+                      <div className="field-name">
+                        <span className="field-type-icon">
+                          <Icon name={typeIcons[f.type]} />
+                        </span>
+                        <div>
+                          <strong>{f.label}</strong>
+                          <span className="muted">
+                            {fieldTypes[f.type]}
+                            {f.archived ? ' · Archiviert' : ''}
+                            {f.required ? ' · Pflichtfeld' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </th>
+                    {contexts.map(([key, label]) => (
+                      <td className="check-col" key={key}>
+                        <label className="check-row">
+                          <input
+                            type="checkbox"
+                            aria-label={`${f.label}: ${label}`}
+                            checked={f.visibility[key]}
+                            disabled={a.busy || f.archived || (key === 'form' && f.required)}
+                            onChange={(e) =>
+                              void a.run(async () => {
+                                await api('/fields/' + f.id, 'PATCH', {
+                                  version: f.version,
+                                  visibility: { ...f.visibility, [key]: e.target.checked },
+                                });
+                                await refresh();
+                              })
+                            }
+                          />
+                        </label>
+                      </td>
+                    ))}
+                    <td className="actions-column">
+                      <div className="actions table-actions">
+                        <IconButton
+                          icon="up"
+                          label={`${f.label} nach oben`}
+                          disabled={i === 0}
+                          onClick={() => move(i, -1)}
+                        />
+                        <IconButton
+                          icon="down"
+                          label={`${f.label} nach unten`}
+                          disabled={i === fields.length - 1}
+                          onClick={() => move(i, 1)}
+                        />
+                        <IconButton
+                          icon="edit"
+                          label={`${f.label} bearbeiten`}
+                          onClick={() => setEdit({ field: f })}
+                        />
+                      </div>
+                    </td>
+                  </tr>
                 ))}
-                <td className="actions-column">
-                  <div className="actions table-actions">
-                    <IconButton
-                      icon="up"
-                      label={`${f.label} nach oben`}
-                      disabled={i === 0}
-                      onClick={() => move(i, -1)}
-                    />
-                    <IconButton
-                      icon="down"
-                      label={`${f.label} nach unten`}
-                      disabled={i === fields.length - 1}
-                      onClick={() => move(i, 1)}
-                    />
-                    <IconButton
-                      icon="edit"
-                      label={`${f.label} bearbeiten`}
-                      onClick={() => setEdit({ field: f })}
-                    />
-                    <IconButton
-                      icon={f.archived ? 'restore' : 'archive'}
-                      label={`${f.label} ${f.archived ? 'aktivieren' : 'archivieren'}`}
-                      onClick={() =>
-                        void a.run(async () => {
-                          await api('/fields/' + f.id + '/archive', 'POST', {
-                            version: f.version,
-                            archived: !f.archived,
-                          });
-                          await refresh();
-                        })
-                      }
-                    />
-                    <IconButton
-                      label={`${f.label} löschen`}
-                      icon="trash"
-                      onClick={() =>
-                        void a.run(async () => {
-                          const usage = await api<{ values: number }>('/fields/' + f.id + '/usage');
-                          setDeletion({ field: f, values: usage.values });
-                        })
-                      }
-                    />
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+          <CardPreview />
+        </div>
       </div>
-      <CardPreview />
       <ShelfLifeSetting key={preferences.shelfLifeMonths} />
       <section className="section-card">
         <h2>Feldzuordnungen</h2>
@@ -704,22 +732,34 @@ export function FieldsSettings() {
           ))}
         </div>
       </section>
-      {edit && <FieldDialog field={edit.field} onClose={() => setEdit(undefined)} onSaved={done} />}
+      {edit && (
+        <FieldDialog
+          field={edit.field}
+          onClose={() => setEdit(undefined)}
+          onSaved={done}
+          onDelete={(field, values) => {
+            setEdit(undefined);
+            setDeletion({ field, values });
+          }}
+        />
+      )}
       {deletion && (
         <Confirm
           title="Feld endgültig löschen?"
           danger
           onCancel={() => setDeletion(undefined)}
-          onConfirm={() =>
+          onConfirm={() => {
+            if (a.busy) return;
             void a.run(async () => {
               await api('/fields/' + deletion.field.id, 'DELETE', {
                 version: deletion.field.version,
                 confirm: true,
               });
-              setDeletion(undefined);
               await refresh();
-            })
-          }
+              focusAdd.current = true;
+              setDeletion(undefined);
+            });
+          }}
         >
           <p>
             {deletion.field.label}: {deletion.values} Liquids mit Werten. Diese Werte werden

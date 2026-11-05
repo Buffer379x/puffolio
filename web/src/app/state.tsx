@@ -19,7 +19,7 @@ export const AppContext = createContext<{
   savePreferences: (patch: Partial<Preferences>) => Promise<void>;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
-  navigate: (path: string) => void;
+  navigate: (path: string, options?: { replace?: boolean }) => void;
 }>({} as never);
 export const useApp = () => useContext(AppContext);
 /** Everyone can look; only the signed-in administrator changes anything. The server enforces it. */
@@ -127,7 +127,7 @@ export function DataProvider({
   me: Me;
   setMe: (m: Me) => void;
   logout: () => Promise<void>;
-  navigate: (s: string) => void;
+  navigate: (s: string, options?: { replace?: boolean }) => void;
   children: ReactNode;
 }) {
   const visitor = me.user.role === 'visitor';

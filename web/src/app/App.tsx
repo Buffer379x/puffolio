@@ -65,7 +65,12 @@ export function App() {
       window.removeEventListener('puffolio-session-expired', expired);
     };
   }, []);
-  const navigate = (url: string) => {
+  const navigate = (url: string, options?: { replace?: boolean }) => {
+    if (options?.replace) {
+      history.replaceState(null, '', url);
+      setRoute(url);
+      return;
+    }
     const event = new Event('puffolio-before-navigate', { cancelable: true });
     if (!window.dispatchEvent(event) && !window.confirm('Ungespeicherte Änderungen verwerfen?'))
       return;
