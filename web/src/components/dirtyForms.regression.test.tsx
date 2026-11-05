@@ -80,7 +80,8 @@ const cases = [
     name: 'field default',
     title: 'Feld bearbeiten',
     component: () => <FieldsSettings />,
-    open: async () => fireEvent.click(await screen.findByRole('button', { name: /bearbeiten$/ })),
+    open: async () =>
+      fireEvent.click(await screen.findByRole('button', { name: 'Notiz bearbeiten' })),
     edit: () => fireEvent.click(screen.getByLabelText('Standardwert für neue Liquids')),
     draft: () => expect(screen.getByLabelText('Standardwert für neue Liquids')).not.toBeChecked(),
   },

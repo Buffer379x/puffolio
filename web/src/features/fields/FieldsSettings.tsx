@@ -14,6 +14,7 @@ import {
   Icon,
 } from '../../components/ui';
 import { useToast } from '../../components/toast';
+import { CardPreview } from './CardPreview';
 import { canonicalNumber, saveBlob } from './values';
 import { download } from '../../app/api';
 export const fieldTypes: Record<FieldType, string> = {
@@ -665,6 +666,7 @@ export function FieldsSettings() {
           </tbody>
         </table>
       </div>
+      <CardPreview />
       <ShelfLifeSetting key={preferences.shelfLifeMonths} />
       <section className="section-card">
         <h2>Feldzuordnungen</h2>

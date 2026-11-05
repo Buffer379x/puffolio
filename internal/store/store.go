@@ -20,7 +20,18 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-const SchemaVersion = 1
+const SchemaVersion = 2
+
+// migrationFiles run in order, one per schema version. A published script never
+// changes: its checksum is stored when it runs and compared at every start.
+var migrationFiles = [SchemaVersion]string{
+	"migrations/001_initial.sql",
+	"migrations/002_palette.sql",
+}
+
+// BackupSchemaSupported tells whether a backup of that schema can be brought in: older
+// ones can, because every migration keeps what they contain. Newer ones cannot.
+func BackupSchemaSupported(v int) bool { return v >= 1 && v <= SchemaVersion }
 
 type Store struct {
 	DB     *sql.DB
@@ -63,9 +74,11 @@ func Open(ctx context.Context, c config.Config) (s *Store, err error) {
 		return nil, fmt.Errorf("another instance is using data directory: %w", e)
 	}
 	s = &Store{Dir: c.DataDir, lock: lock}
+	// "return nil, err" clears s before deferred calls run, so the cleanup keeps its own reference.
+	opened := s
 	defer func() {
 		if err != nil {
-			s.Close()
+			opened.Close()
 		}
 	}()
 	p, _ := filepath.Abs(filepath.Join(c.DataDir, "puffolio.db"))
@@ -94,32 +107,14 @@ func Open(ctx context.Context, c config.Config) (s *Store, err error) {
 		if count > 0 {
 			return nil, fmt.Errorf("unrecognized existing database; refusing initialization")
 		}
-		tx, e := s.DB.BeginTx(ctx, nil)
-		if e != nil {
-			return nil, e
-		}
-		b, _ := migrations.ReadFile("migrations/001_initial.sql")
-		if _, e = tx.ExecContext(ctx, string(b)); e != nil {
-			tx.Rollback()
-			return nil, e
-		}
-		sum := sha256.Sum256(b)
-		if _, e = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,checksum,applied_at) VALUES(1,?,?)", hex.EncodeToString(sum[:]), time.Now().UTC().Format(time.RFC3339Nano)); e != nil {
-			tx.Rollback()
-			return nil, e
-		}
-		if err = tx.Commit(); err != nil {
-			return nil, err
-		}
 	}
-	expectedBytes, _ := migrations.ReadFile("migrations/001_initial.sql")
-	expected := sha256.Sum256(expectedBytes)
-	var checksum string
-	if err = s.DB.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE version=1").Scan(&checksum); err != nil {
-		return nil, fmt.Errorf("migration record invalid: %w", err)
+	if err = verifyMigrations(ctx, s.DB, version); err != nil {
+		return nil, err
 	}
-	if checksum != hex.EncodeToString(expected[:]) {
-		return nil, fmt.Errorf("migration checksum mismatch")
+	for next := version + 1; next <= SchemaVersion; next++ {
+		if err = applyMigration(ctx, s.DB, next); err != nil {
+			return nil, fmt.Errorf("migration to schema %d failed: %w", next, err)
+		}
 	}
 	os.Chmod(p, 0600)
 	if err = os.MkdirAll(filepath.Join(c.DataDir, "media"), 0700); err != nil {
@@ -138,6 +133,97 @@ func Open(ctx context.Context, c config.Config) (s *Store, err error) {
 		}
 	}
 	return s, nil
+}
+func migrationScript(version int) ([]byte, string, error) {
+	script, e := migrations.ReadFile(migrationFiles[version-1])
+	if e != nil {
+		return nil, "", e
+	}
+	sum := sha256.Sum256(script)
+	return script, hex.EncodeToString(sum[:]), nil
+}
+
+// verifyMigrations refuses a database whose history differs from the scripts in this build.
+func verifyMigrations(ctx context.Context, db *sql.DB, applied int) error {
+	for version := 1; version <= applied; version++ {
+		_, expected, e := migrationScript(version)
+		if e != nil {
+			return e
+		}
+		var checksum string
+		if e = db.QueryRowContext(ctx, "SELECT checksum FROM schema_migrations WHERE version=?", version).Scan(&checksum); e != nil {
+			return fmt.Errorf("migration record invalid: %w", e)
+		}
+		if checksum != expected {
+			return fmt.Errorf("migration checksum mismatch")
+		}
+	}
+	return nil
+}
+
+// applyMigration runs one script atomically: it either completes or leaves the database as it was.
+//
+// Foreign keys stay off meanwhile. A script may rebuild a table, and with foreign keys on,
+// DROP TABLE deletes every row that references it through ON DELETE CASCADE, here all tag
+// assignments. SQLite ignores the setting inside a transaction and keeps it per connection,
+// so this one connection does everything, and the check before the commit replaces the
+// enforcement that was off.
+func applyMigration(ctx context.Context, db *sql.DB, version int) (err error) {
+	script, sum, err := migrationScript(version)
+	if err != nil {
+		return err
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if err = setForeignKeys(ctx, conn, 0); err != nil {
+		return err
+	}
+	defer func() {
+		if e := setForeignKeys(ctx, conn, 1); e != nil && err == nil {
+			err = e
+		}
+	}()
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, string(script)); err != nil {
+		return err
+	}
+	var reached, violations int
+	if err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&reached); err != nil {
+		return err
+	}
+	if reached != version {
+		return fmt.Errorf("script left schema %d", reached)
+	}
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM pragma_foreign_key_check").Scan(&violations); err != nil {
+		return err
+	}
+	if violations != 0 {
+		return fmt.Errorf("%d broken foreign key references", violations)
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO schema_migrations(version,checksum,applied_at) VALUES(?,?,?)", version, sum, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+func setForeignKeys(ctx context.Context, conn *sql.Conn, want int) error {
+	if _, e := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA foreign_keys=%d", want)); e != nil {
+		return e
+	}
+	var got int
+	if e := conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&got); e != nil {
+		return e
+	}
+	if got != want {
+		return fmt.Errorf("foreign keys stayed %d", got)
+	}
+	return nil
 }
 func (s *Store) Close() error {
 	if s == nil {

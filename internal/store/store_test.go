@@ -16,7 +16,7 @@ func TestOpenFreshStore(t *testing.T) {
 	}
 	defer s.Close()
 	var v int
-	if err = s.DB.QueryRow("PRAGMA user_version").Scan(&v); err != nil || v != 1 {
+	if err = s.DB.QueryRow("PRAGMA user_version").Scan(&v); err != nil || v != SchemaVersion {
 		t.Fatalf("schema=%d err=%v", v, err)
 	}
 	var fk int

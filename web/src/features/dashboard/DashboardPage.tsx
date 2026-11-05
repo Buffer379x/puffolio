@@ -37,6 +37,7 @@ import { FilterBuilder } from '../liquids/FilterBuilder';
 import { normalizeFilter, useTags } from '../liquids/data';
 import { useToast } from '../../components/toast';
 import { ColumnChart, DonutChart, ShelfStatusChart } from './charts';
+import { parseWidgetLimit } from './widgetLimit';
 const titles: Record<WidgetType, string> = {
   count: 'Anzahl Liquids',
   favorites: 'Favoriten',
@@ -65,6 +66,7 @@ const fieldTypes: Partial<Record<WidgetType, string[]>> = {
   timeline: ['date'],
   top: ['rating', 'number'],
 };
+const limitedTypes: WidgetType[] = ['recent', 'low', 'tags', 'dates', 'expiring', 'donut', 'top'];
 const statIcons: Partial<Record<WidgetType, string>> = {
   count: 'liquids',
   favorites: 'heart',
@@ -95,7 +97,12 @@ function WidgetEditor({
         },
   );
   const [initial] = useState(() => JSON.stringify(draft));
-  const guard = useDraftGuard(JSON.stringify(draft) !== initial, onClose);
+  const [initialLimit] = useState(() => String(draft.limit || 5));
+  const [limitText, setLimitText] = useState(initialLimit);
+  const guard = useDraftGuard(
+    JSON.stringify(draft) !== initial || limitText !== initialLimit,
+    onClose,
+  );
   const [error, setError] = useState<unknown>();
   const types = fieldTypes[draft.type];
   const referenced = fields.find((f) => f.id === draft.fieldId && !f.archived);
@@ -116,6 +123,11 @@ function WidgetEditor({
                   filters: normalizeFilter(draft.filters, fields),
                 };
                 if (types && !referenced) throw new Error('Feld auswählen.');
+                if (limitedTypes.includes(w.type)) {
+                  const limit = parseWidgetLimit(limitText);
+                  if (limit === null) throw new Error('Einträge: ganze Zahl von 1 bis 10 eingeben.');
+                  w.limit = limit;
+                }
                 if (w.type === 'low' && !w.threshold?.trim())
                   throw new Error('Grenzwert eingeben.');
                 if (w.type === 'dates' && !w.window && (!w.from || !w.to || w.from > w.to))
@@ -210,18 +222,16 @@ function WidgetEditor({
             </select>
           </label>
         )}
-        {['recent', 'low', 'tags', 'dates', 'expiring', 'donut', 'top'].includes(draft.type) && (
+        {limitedTypes.includes(draft.type) && (
           <label className="form-field">
             Einträge
-            <select
+            <input
               aria-label="Widgeteinträge"
-              value={draft.limit || 5}
-              onChange={(e) => patch({ limit: Number(e.target.value) as 3 | 5 | 10 })}
-            >
-              {[3, 5, 10].map((n) => (
-                <option key={n}>{n}</option>
-              ))}
-            </select>
+              inputMode="numeric"
+              value={limitText}
+              aria-invalid={parseWidgetLimit(limitText) === null}
+              onChange={(e) => setLimitText(e.target.value)}
+            />
           </label>
         )}
         {draft.type === 'low' && referenced && (
@@ -373,6 +383,7 @@ function RecentGrid({
 }) {
   const { fields, preferences } = useApp();
   const rating = fields.find((f) => f.id === preferences.roles.rating && !f.archived);
+  const hasSubtitle = fields.some((f) => f.type === 'text' && !f.archived);
   return (
     <div className="recent-grid">
       {items.map((l) => {
@@ -381,11 +392,17 @@ function RecentGrid({
           <div className="mini-card" key={l.id}>
             <LiquidImage liquid={l} tags={tags} />
             <button type="button" className="name-button" onClick={() => onOpen(l)}>
-              <span>{l.name}</span>
+              <span title={l.name}>{l.name}</span>
             </button>
-            <p className="card-subtitle">{subtitleOf(l, fields)}</p>
+            <p className="card-subtitle">
+              {subtitleOf(l, fields) || (hasSubtitle && <span className="muted">—</span>)}
+            </p>
             <div className="card-rating-row">
-              {typeof stars === 'number' && <Stars value={stars} max={rating?.config.stars || 5} />}
+              {typeof stars === 'number' ? (
+                <Stars value={stars} max={rating?.config.stars || 5} />
+              ) : (
+                rating && <span className="muted">—</span>
+              )}
             </div>
             <ShelfBar liquid={l} />
           </div>
@@ -586,7 +603,12 @@ export function DashboardPage() {
               {...dragProps}
             >
               <Panel
-                className={'widget ' + (isStat ? 'stat-card' : '') + (draft ? ' editing' : '')}
+                className={
+                  'widget ' +
+                  (isStat ? 'stat-card' : '') +
+                  (w.type === 'donut' ? ' widget-fill' : '') +
+                  (draft ? ' editing' : '')
+                }
                 title={title}
                 subtitle={
                   w.type === 'low' && w.threshold

@@ -274,3 +274,56 @@ func TestStatisticWidgets(t *testing.T) {
 		t.Fatalf("not set up: %+v %v", none, e)
 	}
 }
+
+func TestWidgetLimitRange(t *testing.T) {
+	ctx := context.Background()
+	s, e := store.Open(ctx, config.Config{DataDir: t.TempDir()})
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	u, e := auth.New(s).CreateUser(ctx, "alice", "Alice", "user", "A-long-test-password")
+	if e != nil {
+		t.Fatal(e)
+	}
+	maker, e := fields.Save(ctx, s.DB, u.CollectionID, fields.Definition{Label: "Hersteller", Type: "text"}, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for i := 0; i < 8; i++ {
+		name := fmt.Sprintf("L%d", i)
+		value, _ := json.Marshal(fmt.Sprintf("Hersteller %d", i))
+		if _, e = liquids.Save(ctx, s.DB, u.CollectionID, "", liquids.Input{Name: &name, Values: map[string]*fields.Value{maker.ID: {Type: "text", Value: value}}}, nil); e != nil {
+			t.Fatal(e)
+		}
+	}
+	query := func(w Widget) Result {
+		t.Helper()
+		w.ID = "w"
+		out, e := Query(ctx, s.DB, u.CollectionID, []Widget{w})
+		if e != nil {
+			t.Fatal(e)
+		}
+		return out[0]
+	}
+	for limit, want := range map[int]int{0: 5, 1: 1, 7: 7, 10: 8} {
+		if got := query(Widget{Type: "recent", Limit: limit}); got.Error != "" || len(got.Items) != want {
+			t.Fatalf("limit %d: %d items, error %q", limit, len(got.Items), got.Error)
+		}
+	}
+	donut := query(Widget{Type: "donut", FieldID: maker.ID, Limit: 1})
+	if donut.Error != "" || len(donut.Segments) != 2 || donut.Segments[1].ID != "other" {
+		t.Fatalf("donut with one entry: %+v", donut)
+	}
+	for _, limit := range []int{-1, 11} {
+		if got := query(Widget{Type: "recent", Limit: limit}); got.Error == "" {
+			t.Fatalf("limit %d accepted", limit)
+		}
+		if e := Validate([]Widget{{ID: "w", Type: "recent", Title: "T", Size: "small", Limit: limit}}); e == nil {
+			t.Fatalf("layout with limit %d accepted", limit)
+		}
+	}
+	if e := Validate([]Widget{{ID: "w", Type: "recent", Title: "T", Size: "small", Limit: 7}}); e != nil {
+		t.Fatal(e)
+	}
+}

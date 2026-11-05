@@ -1,6 +1,6 @@
 import { useApp } from '../app/state';
 import type { Liquid, Tag } from '../app/types';
-import { palette, paletteColor } from './PalettePicker';
+import { legacyPaletteIds, paletteColor } from './PalettePicker';
 import { Icon } from './ui';
 /** Every liquid has a recognisable colour, so a collection without photos still reads well. */
 export function liquidColor(liquid: Liquid, colorFieldId: string | undefined, tags: Tag[] = []) {
@@ -13,7 +13,7 @@ export function liquidColor(liquid: Liquid, colorFieldId: string | undefined, ta
   }
   let hash = 0;
   for (const char of liquid.name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return palette[hash % palette.length][2];
+  return paletteColor(legacyPaletteIds[hash % legacyPaletteIds.length]);
 }
 function Bottle({ name, color }: { name: string; color: string }) {
   const body = 'M27 34h30v15c0 7 14 8 14 22v76c0 11-9 17-29 17s-29-6-29-17V71c0-14 14-15 14-22Z';

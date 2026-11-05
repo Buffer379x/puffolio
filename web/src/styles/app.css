@@ -725,6 +725,32 @@ main {
   width: 44px;
 }
 
+/* The one card in the field settings, with its order in words beside it. */
+.card-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+}
+.card-preview .liquid-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.card-preview h3 {
+  margin-bottom: var(--space-2);
+}
+.card-preview ol {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+}
+@media (max-width: 600px) {
+  .card-preview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .card-preview > .liquid-grid {
+    max-width: 280px;
+  }
+}
+
 /* Cards */
 .liquid-grid {
   display: grid;
@@ -766,8 +792,11 @@ main {
 .name-button:hover {
   color: var(--accent-label);
 }
-.item-card .name-button span {
+/* A name always takes two lines, so what follows starts at the same height on every card. */
+.item-card .name-button span,
+.mini-card .name-button span {
   display: -webkit-box;
+  min-height: 2lh;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
@@ -830,11 +859,37 @@ main {
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
+.card-shelf {
+  min-height: 18px;
+}
 .item-card-actions {
   position: relative;
   z-index: 1;
+  display: flex;
+  justify-content: flex-end;
   margin-top: auto;
   padding-top: var(--space-1);
+}
+/* Each card row is one shared track, so rows line up even when tags wrap on one card. */
+@supports (grid-template-rows: subgrid) {
+  .liquid-card {
+    --card-inset: var(--space-1);
+    display: grid;
+    grid-row: span var(--card-rows);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: subgrid;
+    row-gap: var(--space-2);
+  }
+  .liquid-card .item-card-content {
+    display: contents;
+  }
+  .liquid-card .item-card-content > * {
+    min-width: 0;
+    margin-inline: var(--card-inset);
+  }
+  .liquid-card h2 {
+    margin-top: var(--card-inset);
+  }
 }
 .fav-button {
   position: absolute;
@@ -1254,15 +1309,6 @@ thead .actions-column {
   flex-direction: row;
   padding-bottom: var(--space-2);
 }
-.stat-card h2 {
-  color: var(--muted);
-  font-size: var(--text-sm);
-  line-height: 20px;
-  font-weight: 400;
-}
-.widget-slot:first-child .stat-card {
-  background: var(--accent-soft);
-}
 .stat-icon {
   display: grid;
   place-items: center;
@@ -1430,17 +1476,27 @@ thead .actions-column {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
+  flex: 1;
   gap: var(--space-5);
 }
+.widget-fill .panel-body {
+  display: flex;
+  flex-direction: column;
+}
+/* The ring does not push on the row's height: it takes what the row has, and the row can shrink again. */
 .donut {
   position: relative;
-  flex: 0 0 140px;
-  width: 140px;
-  height: 140px;
+  flex: 1 1 140px;
+  align-self: stretch;
+  min-width: 140px;
+  min-height: 140px;
 }
 .donut svg {
+  position: absolute;
+  inset: 0;
   display: block;
-  transform: rotate(-90deg);
+  width: 100%;
+  height: 100%;
 }
 .donut circle {
   transition: opacity 0.15s;
@@ -1475,7 +1531,7 @@ thead .actions-column {
   white-space: nowrap;
 }
 .chart-legend {
-  flex: 1 1 150px;
+  flex: 0 1 130px;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1817,7 +1873,7 @@ dialog::backdrop {
 }
 .palette-picker {
   display: grid;
-  grid-template-columns: repeat(6, var(--control-height));
+  grid-template-columns: repeat(8, var(--control-height));
   gap: var(--space-2);
   margin-block: var(--space-4);
 }
@@ -2221,6 +2277,9 @@ tr.archived .field-name {
   }
   .item-card-content {
     padding: var(--space-2) 0 0;
+  }
+  .liquid-card {
+    --card-inset: 0;
   }
   .fav-button {
     top: var(--space-2);

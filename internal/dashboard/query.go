@@ -50,6 +50,9 @@ type Result struct {
 	Error    string           `json:"error,omitempty"`
 }
 
+// validLimit bounds how many entries a widget may ask for; 0 means not set.
+func validLimit(n int) bool { return n >= 1 && n <= 10 }
+
 func Validate(widgets []Widget) error {
 	if len(widgets) > 30 {
 		return fault.Validation("Maximal 30 Widgets")
@@ -73,7 +76,7 @@ func Validate(widgets []Widget) error {
 		if w.Size != "small" && w.Size != "medium" && w.Size != "wide" {
 			return fault.Validation("Ungültige Widgetgröße")
 		}
-		if w.Limit != 0 && w.Limit != 3 && w.Limit != 5 && w.Limit != 10 {
+		if w.Limit != 0 && !validLimit(w.Limit) {
 			return fault.Validation("Ungültiges Widgetlimit")
 		}
 		if w.Window != "" && w.Window != "past" && w.Window != "upcoming" {
@@ -137,7 +140,7 @@ func queryOne(ctx context.Context, db *sql.DB, cid string, w Widget, dm map[stri
 	if limit == 0 {
 		limit = 5
 	}
-	if limit != 3 && limit != 5 && limit != 10 {
+	if !validLimit(limit) {
 		return res, fault.Validation("Ungültiges Limit")
 	}
 	var d fields.Definition

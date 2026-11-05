@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Container version="2">
   <Name>Puffolio</Name>
-  <Repository>ghcr.io/buffer379x/puffolio:0.3.0</Repository>
+  <Repository>ghcr.io/buffer379x/puffolio:0.4.0</Repository>
   <Registry>https://ghcr.io/buffer379x/puffolio</Registry>
   <Network>bridge</Network>
   <MyIP/>
@@ -12,8 +12,8 @@
   <Description>Ein Container mit SQLite. Das Appdata-Verzeichnis muss auf lokalem Speicher liegen und für UID 99 / GID 100 beschreibbar sein. Den Setup-Code zeigt beim ersten Start das Log des Containers. Die Sammlung ist für alle lesbar, die die Adresse erreichen; ändern kann nur der angemeldete Administrator.</Description>
   <Category>Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8080]</WebUI>
-  <Icon>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.3.0/assets/brand/icon-256.png</Icon>
-  <TemplateURL>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.3.0/deploy/unraid/puffolio.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.4.0/assets/brand/icon-256.png</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/Buffer379x/puffolio/v0.4.0/deploy/unraid/puffolio.xml</TemplateURL>
   <ExtraParams>--restart=unless-stopped --stop-timeout=20 --user=99:100 --read-only --cap-drop=ALL --security-opt=no-new-privileges --tmpfs=/tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777</ExtraParams>
   <Config Name="WebUI-Port" Target="8080" Default="8787" Mode="tcp" Description="HTTP-Port der Weboberfläche" Type="Port" Display="always" Required="true" Mask="false">8787</Config>
   <Config Name="Appdata" Target="/data" Default="/mnt/user/appdata/puffolio" Mode="rw" Description="Lokale SQLite-Datenbank, Bilder und Sicherungen. Schreibrechte für 99:100 erforderlich. Kein SMB-/NFS-Mount." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/puffolio</Config>

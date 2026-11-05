@@ -1,4 +1,4 @@
-import { test, expect, addField, goto } from './fixtures';
+import { test, expect, addField, addLiquid, fields, goto, type App } from './fixtures';
 test('duplicate date widgets save as whole layout and persist across reload; cancel discards draft', async ({
   app,
 }) => {
@@ -68,4 +68,117 @@ test('tool contains only image/title and calculator invalidates old results on a
   await app.page.getByRole('button', { name: 'Berechnen', exact: true }).click();
   await expect(app.page.getByRole('alert')).toContainText('überschreiten');
   expect((await (await app.api.get('/api/v1/liquids')).json()).total).toBe(0);
+});
+test('key-figure widgets look like every other widget', async ({ app }) => {
+  await goto(app, '/dashboard');
+  const look = (name: string) =>
+    app.page.getByRole('heading', { name, exact: true }).evaluate((heading) => {
+      const text = getComputedStyle(heading);
+      return {
+        size: text.fontSize,
+        weight: text.fontWeight,
+        color: text.color,
+        surface: getComputedStyle(heading.closest('.panel')!).backgroundColor,
+      };
+    });
+  const reference = await look('Zuletzt hinzugefügt');
+  expect(await look('Liquids')).toEqual(reference);
+  expect(await look('Favoriten')).toEqual(reference);
+});
+async function taggedLiquids(app: App, count: number) {
+  const tagField = (await fields(app)).find((f) => f.type === 'tags');
+  const tag = await app.write(`/fields/${tagField.id}/tags`, 'POST', {
+    name: 'Testtag',
+    paletteId: 'teal',
+  });
+  for (let i = 0; i < count; i++)
+    await addLiquid(app, 'Liquid ' + i, { [tagField.id]: { type: 'tags', value: [tag.id] } });
+  return tagField;
+}
+/** The ring is drawn in a 100-unit viewBox, so its size follows from the SVG's on-screen scale. */
+const donutGeometry = (app: App, title: string) =>
+  app.page
+    .locator('.panel')
+    .filter({ has: app.page.getByRole('heading', { name: title, exact: true }) })
+    .evaluate((panel) => {
+      const body = panel.querySelector('.panel-body')!;
+      const chart = panel.querySelector('.donut-chart')!.getBoundingClientRect();
+      const slot = panel.querySelector('.donut')!.getBoundingClientRect();
+      const scale = panel.querySelector<SVGSVGElement>('.donut svg')!.getScreenCTM()!;
+      return {
+        contentBottom:
+          body.getBoundingClientRect().bottom - parseFloat(getComputedStyle(body).paddingBottom),
+        chartBottom: chart.bottom,
+        chartMiddle: chart.top + chart.height / 2,
+        slotMiddle: slot.top + slot.height / 2,
+        slotSmallerSide: Math.min(slot.width, slot.height),
+        ring: 100 * Math.hypot(scale.a, scale.b),
+      };
+    });
+test('donut uses the height a taller neighbour gives its row', async ({ app }) => {
+  await taggedLiquids(app, 6);
+  await app.page.setViewportSize({ width: 1440, height: 1000 });
+  await goto(app, '/dashboard');
+  await expect(app.page.locator('.donut')).toBeVisible();
+  const g = await donutGeometry(app, 'Tags');
+  expect(Math.abs(g.chartBottom - g.contentBottom)).toBeLessThanOrEqual(1);
+  expect(Math.abs(g.slotMiddle - g.chartMiddle)).toBeLessThanOrEqual(1);
+  expect(g.ring).toBeGreaterThan(150);
+  expect(Math.abs(g.ring - g.slotSmallerSide)).toBeLessThanOrEqual(2);
+});
+test('donut keeps its minimum size alone in a row and on a phone', async ({ app }) => {
+  const tagField = await taggedLiquids(app, 2);
+  const { version } = await (await app.api.get('/api/v1/dashboard')).json();
+  await app.write('/dashboard', 'PUT', {
+    version,
+    widgets: [
+      { id: 'solo', type: 'donut', title: 'Solo', size: 'wide', fieldId: tagField.id, limit: 5 },
+    ],
+  });
+  await app.page.setViewportSize({ width: 1440, height: 1000 });
+  await goto(app, '/dashboard');
+  await expect(app.page.locator('.donut')).toBeVisible();
+  const wide = await donutGeometry(app, 'Solo');
+  expect(wide.ring).toBeGreaterThanOrEqual(139);
+  expect(wide.ring).toBeLessThan(160);
+  await app.page.setViewportSize({ width: 360, height: 800 });
+  const phone = await donutGeometry(app, 'Solo');
+  expect(phone.ring).toBeGreaterThanOrEqual(139);
+  const overflow = await app.page.evaluate(
+    () => document.documentElement.scrollWidth - innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+test('recently added keeps its rows aligned for any name length', async ({ app }) => {
+  const longName = 'Sehr langer Name '.repeat(7).trim();
+  await addLiquid(app, 'Kurz');
+  await addLiquid(app, longName);
+  await addLiquid(app, 'Donaudampfschifffahrtsgesellschaft'.repeat(3));
+  await app.page.setViewportSize({ width: 1440, height: 1000 });
+  await goto(app, '/dashboard');
+  await expect(app.page.locator('.mini-card')).toHaveCount(3);
+  const cards = await app.page.locator('.mini-card').evaluateAll((list) =>
+    list.map((card) => {
+      const name = card.querySelector<HTMLElement>('.name-button span')!;
+      return {
+        subtitleTop: card.querySelector('.card-subtitle')!.getBoundingClientRect().top,
+        ratingTop: card.querySelector('.card-rating-row')!.getBoundingClientRect().top,
+        nameHeight: name.getBoundingClientRect().height,
+        lineHeight: parseFloat(getComputedStyle(name).lineHeight),
+        width: name.getBoundingClientRect().right <= card.getBoundingClientRect().right + 0.5,
+      };
+    }),
+  );
+  for (const card of cards) {
+    expect(Math.abs(card.subtitleTop - cards[0].subtitleTop)).toBeLessThan(1);
+    expect(Math.abs(card.ratingTop - cards[0].ratingTop)).toBeLessThan(1);
+    expect(Math.abs(card.nameHeight - 2 * card.lineHeight)).toBeLessThan(1);
+    expect(card.width).toBe(true);
+  }
+  await expect(
+    app.page.getByRole('button', { name: longName, exact: true }).locator('span'),
+  ).toHaveAttribute('title', longName);
+  const empty = app.page.locator('.mini-card').filter({ hasText: 'Kurz' });
+  await expect(empty.locator('.card-subtitle')).toHaveText('—');
+  await expect(empty.locator('.card-rating-row')).toHaveText('—');
 });

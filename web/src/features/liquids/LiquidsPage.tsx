@@ -6,7 +6,8 @@ import { readView, writeView, type ViewState } from './viewState';
 import { useTags, normalizeFilter } from './data';
 import { LiquidEditor } from './LiquidEditor';
 import { LiquidDetail } from './LiquidDetail';
-import { LiquidCard, type CardFields } from './LiquidCard';
+import { LiquidCard } from './LiquidCard';
+import { cardLayout, shelfEnabled, shownFields } from './cardLayout';
 import { LiquidTable } from './LiquidTable';
 import { ViewDialog } from './ViewDialog';
 import { FilterBuilder } from './FilterBuilder';
@@ -124,35 +125,11 @@ export function LiquidsPage({ query }: { query: string }) {
     setSearch('');
     update({ favorite: false, filters: undefined, search: '', page: 1 });
   };
-  const chosen = q.view === 'grid' ? preferences.gridFields : preferences.listFields;
-  const shown = fields.filter(
-    (f) =>
-      !f.archived &&
-      f.visibility[q.view] &&
-      (preferences.images || f.type !== 'image') &&
-      chosen.includes(f.id),
-  );
+  const shown = shownFields(fields, preferences, q.view);
   const imageRole = fields.find((f) => f.id === preferences.roles.image && !f.archived);
   const showImage = preferences.images && (!imageRole || shown.includes(imageRole));
-  const rating = shown.find((f) => f.id === preferences.roles.rating);
-  const subtitle = shown.find((f) => f.type === 'text');
-  const cardFields: CardFields = {
-    subtitle,
-    rating,
-    tagFields: shown.filter((f) => f.type === 'tags'),
-    rest: shown.filter(
-      (f) =>
-        f.type !== 'tags' &&
-        f !== rating &&
-        f !== subtitle &&
-        f !== imageRole &&
-        f.id !== preferences.roles.color,
-    ),
-    stripped: !showImage,
-  };
-  const shelfOn =
-    !!preferences.roles.purchase &&
-    (preferences.shelfLifeMonths > 0 || !!preferences.roles.shelfOverride);
+  const layout = cardLayout(fields, preferences);
+  const shelfOn = shelfEnabled(preferences);
   const items = list.data?.items || [];
   const sortOptions = fields.filter(
     (f) => !f.archived && ['text', 'number', 'rating', 'date', 'boolean'].includes(f.type),
@@ -356,7 +333,7 @@ export function LiquidsPage({ query }: { query: string }) {
               <LiquidCard
                 key={l.id}
                 liquid={l}
-                fields={cardFields}
+                layout={layout}
                 tags={tags.data}
                 onOpen={() => setDetail(l)}
                 onEdit={canEdit ? () => setEditing({ liquid: l }) : undefined}

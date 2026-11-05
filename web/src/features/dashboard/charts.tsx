@@ -94,28 +94,30 @@ export function DonutChart({
   return (
     <div className={'donut-chart ' + (active ? 'hovering' : '')}>
       <div className="donut">
-        <svg viewBox="0 0 100 100" width="140" height="140" aria-hidden="true">
-          {segments.map((s, i) => {
-            const length = (s.count / total) * circumference;
-            const start = offset;
-            offset += length;
-            return (
-              <circle
-                key={s.id}
-                className={active === s.id ? 'active' : ''}
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="none"
-                stroke={seriesColor(s, i)}
-                strokeWidth="14"
-                strokeDasharray={`${Math.max(length - gap, 0.5)} ${circumference}`}
-                strokeDashoffset={-start}
-                onPointerEnter={() => setActive(s.id)}
-                onPointerLeave={() => setActive(undefined)}
-              />
-            );
-          })}
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <g transform="rotate(-90 50 50)">
+            {segments.map((s, i) => {
+              const length = (s.count / total) * circumference;
+              const start = offset;
+              offset += length;
+              return (
+                <circle
+                  key={s.id}
+                  className={active === s.id ? 'active' : ''}
+                  cx="50"
+                  cy="50"
+                  r={radius}
+                  fill="none"
+                  stroke={seriesColor(s, i)}
+                  strokeWidth="14"
+                  strokeDasharray={`${Math.max(length - gap, 0.5)} ${circumference}`}
+                  strokeDashoffset={-start}
+                  onPointerEnter={() => setActive(s.id)}
+                  onPointerLeave={() => setActive(undefined)}
+                />
+              );
+            })}
+          </g>
         </svg>
         <div className="donut-center">
           <strong>{shown ? shown.count : total}</strong>
