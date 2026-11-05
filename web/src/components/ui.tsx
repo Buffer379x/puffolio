@@ -5,13 +5,17 @@ import {
   useState,
   type ReactNode,
   type ButtonHTMLAttributes,
+  type Ref,
 } from 'react';
 import { APIError } from '../app/api';
 export function Button({
   variant = 'secondary',
   className = '',
   ...p
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'danger';
+  ref?: Ref<HTMLButtonElement>;
+}) {
   return <button type="button" {...p} className={`button ${variant} ${className}`} />;
 }
 /** One icon set for the whole app; every glyph is drawn on the same 24px grid. */

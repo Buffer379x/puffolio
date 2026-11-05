@@ -49,6 +49,7 @@
   --topbar-height: 64px;
   --content-max: 1360px;
   --page-pad: var(--space-8);
+  --sticky-top: var(--space-4);
   --layout-gap: var(--space-6);
 }
 :root[data-theme='light'] {

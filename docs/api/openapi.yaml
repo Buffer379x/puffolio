@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Puffolio API",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "description": "Same-origin. One administrator maintains the collection; read routes marked with an empty security requirement are public. Trash and media variant=master always require the session. UTC event timestamps; calendar dates YYYY-MM-DD; numbers are exact canonical decimal strings. Cookie sessions:7-day idle/30-day absolute. Mutation CSRF+Origin required. New required fields apply only to newly created liquids via requiredFrom cutoff. Field PATCH merges top-level properties; liquid PATCH merges submitted value keys, null removes. Import defaults preserve archived historical options."
   },
   "servers": [
@@ -2394,6 +2394,252 @@
                   "paletteId",
                   "version"
                 ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete tag everywhere: assignments, field default, widget filters and saved view filters, in one transaction. If a liquid of a required field loses its last tag, the requirement applies to liquids created from now on.",
+        "operationId": "delete_api_v1_fields_id_tags_tagId",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "$ref": "#/components/parameters/CSRF"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "confirm": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "version",
+                  "confirm"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fields/{id}/tags/{tagId}/usage": {
+      "get": {
+        "summary": "Count what deleting this tag touches: liquids including trash, of which trashed; field default; widgets and saved views filtering by it; liquids of a required field left without a tag",
+        "operationId": "get_api_v1_fields_id_tags_tagId_usage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Usage of the tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "liquids",
+                    "trashed",
+                    "isDefault",
+                    "widgets",
+                    "views",
+                    "orphaned"
+                  ],
+                  "properties": {
+                    "liquids": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "trashed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "widgets": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "views": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "orphaned": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
             }
           }
@@ -6161,9 +6407,17 @@
       "Palette": {
         "type": "string",
         "enum": [
-          "lime",
-          "pistachio",
+          "red",
+          "coral",
+          "apricot",
+          "tangerine",
+          "orange",
+          "honey",
+          "sand",
+          "amber",
           "olive",
+          "pistachio",
+          "lime",
           "moss",
           "green",
           "mint",
@@ -6171,8 +6425,8 @@
           "teal",
           "aqua",
           "cyan",
-          "sky",
           "ice",
+          "sky",
           "blue",
           "cornflower",
           "periwinkle",
@@ -6184,14 +6438,6 @@
           "magenta",
           "rose",
           "raspberry",
-          "red",
-          "coral",
-          "apricot",
-          "orange",
-          "tangerine",
-          "amber",
-          "honey",
-          "sand",
           "slate"
         ]
       },

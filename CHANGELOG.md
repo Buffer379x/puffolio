@@ -1,5 +1,20 @@
 # Änderungen
 
+## 0.4.1 – 2026-11-05
+
+Kein neues Datenbankschema. Ein Rückweg auf 0.4.0 ist möglich.
+
+- Tags lassen sich unter Einstellungen → Tags löschen. Eine Warnung nennt vorher, was betroffen ist.
+  Der Tag verschwindet auch aus Standardwerten, Widget-Filtern und gespeicherten Ansichten. Das
+  lässt sich nicht rückgängig machen. Verliert ein Liquid so seinen letzten Tag in einem Pflichtfeld,
+  gilt die Pflicht danach nur noch für neu angelegte Liquids.
+- Die 32 Tagfarben laufen als Farbspektrum von Rot bis Pink, Grau steht zuletzt. Bestehende Tags und
+  Flaschenfarben bleiben unverändert.
+- Einstellungen → Felder zeigt Feldtabelle und Kachelvorschau auf Desktop und Tablet nebeneinander.
+  Die Vorschau bleibt beim Scrollen stehen, die Liste „Reihenfolge“ ist eingeklappt.
+- Felder archivieren und löschen geht jetzt im Dialog „Feld bearbeiten“ statt in der Tabelle.
+- Ein Link mit einem gelöschten Tag zeigt die Liquids statt einer leeren Liste.
+
 ## 0.4.0 – 2026-11-05
 
 **Datenbankschema ändert sich.** Die Migration läuft beim ersten Start. Vorher eine

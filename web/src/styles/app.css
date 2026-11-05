@@ -735,8 +735,11 @@ main {
 .card-preview .liquid-grid {
   grid-template-columns: minmax(0, 1fr);
 }
-.card-preview h3 {
-  margin-bottom: var(--space-2);
+.card-preview-order summary {
+  min-height: var(--control-height);
+  font-weight: 600;
+  line-height: var(--control-height);
+  cursor: pointer;
 }
 .card-preview ol {
   margin: 0 0 var(--space-4);
@@ -748,6 +751,64 @@ main {
   }
   .card-preview > .liquid-grid {
     max-width: 280px;
+  }
+}
+
+/*
+ * Field table and card preview side by side, so a change shows at once. Going by the width of the
+ * content, not the window: at 901 px the sidebar leaves less room than at 900 px without it.
+ */
+.fields-workspace {
+  container-type: inline-size;
+}
+@container (min-width: 680px) {
+  .fields-workspace-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 216px;
+    align-items: start;
+    gap: var(--space-4);
+  }
+  .fields-workspace .field-table {
+    min-width: 0;
+  }
+  .fields-workspace .section-card {
+    position: sticky;
+    top: var(--sticky-top);
+    max-height: calc(100dvh - var(--sticky-top) - var(--space-4));
+    margin-top: 0;
+    padding: var(--space-3);
+    overflow-y: auto;
+  }
+  .fields-workspace .section-card h2 {
+    margin-bottom: var(--space-3);
+  }
+  .fields-workspace .card-preview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+}
+@container (min-width: 680px) and (max-width: 899px) {
+  .fields-workspace .field-type-icon {
+    display: none;
+  }
+  .fields-workspace .check-col {
+    width: 60px;
+  }
+}
+@container (min-width: 900px) {
+  .fields-workspace-grid {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: var(--space-6);
+  }
+  .fields-workspace .section-card {
+    padding: var(--space-6);
+  }
+}
+@media (max-height: 480px) {
+  .fields-workspace .section-card {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 
@@ -1703,6 +1764,10 @@ dialog::backdrop {
 .modal-footer .push-left {
   margin-right: auto;
 }
+.modal-footer-side {
+  display: flex;
+  gap: var(--space-3);
+}
 .details-visual {
   width: min(100%, 320px);
   margin: 0 auto var(--space-6);
@@ -2010,7 +2075,7 @@ dialog::backdrop {
   overflow-wrap: anywhere;
 }
 .field-table {
-  min-width: 720px;
+  min-width: 560px;
 }
 .field-name {
   display: flex;
@@ -2021,6 +2086,7 @@ dialog::backdrop {
 .field-name strong {
   display: block;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .field-type-icon {
   display: grid;
@@ -2177,6 +2243,7 @@ tr.archived .field-name {
   :root {
     --page-pad: var(--space-4);
     --layout-gap: var(--space-4);
+    --sticky-top: 72px; /* below the header bar */
   }
   .sidebar {
     width: min(320px, calc(100vw - 32px));
@@ -2419,6 +2486,9 @@ tr.archived .field-name {
   }
   .modal-footer .push-left {
     margin-right: 0;
+  }
+  .modal-footer-side > .button {
+    flex: 1;
   }
   .crop-stage {
     padding: var(--space-3);

@@ -27,12 +27,14 @@ export function CardPreview() {
           />
         </div>
         <div>
-          <h3 id="card-preview-order">Reihenfolge</h3>
-          <ol aria-labelledby="card-preview-order">
-            {cardOrder(layout).map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ol>
+          <details className="card-preview-order">
+            <summary id="card-preview-order">Reihenfolge</summary>
+            <ol aria-labelledby="card-preview-order">
+              {cardOrder(layout).map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ol>
+          </details>
           {hidden.length > 0 && (
             <p className="muted">
               In „Ansicht“ ausgeblendet: {hidden.map((f) => f.label).join(', ')}

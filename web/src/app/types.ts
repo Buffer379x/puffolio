@@ -35,6 +35,14 @@ export interface Field {
     filterable?: boolean;
   };
 }
+export interface TagUsage {
+  liquids: number;
+  trashed: number;
+  isDefault: boolean;
+  widgets: number;
+  views: number;
+  orphaned: number;
+}
 export interface Tag {
   id: string;
   fieldId: string;

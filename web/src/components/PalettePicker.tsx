@@ -1,8 +1,19 @@
-/** In dialog order: full rows of eight, four on a phone. */
+/**
+ * In dialog order, row by row: through the spectrum from red to pink, with grey last. Rows of
+ * eight, four on a phone.
+ */
 export const palette = [
-  ['lime', 'Limette', '#C5E879'],
-  ['pistachio', 'Pistazie', '#DDEFA6'],
+  ['red', 'Rot', '#E9ADA8'],
+  ['coral', 'Koralle', '#F19A85'],
+  ['apricot', 'Aprikose', '#FBDCC6'],
+  ['tangerine', 'Mandarine', '#F0A765'],
+  ['orange', 'Orange', '#E9BB94'],
+  ['honey', 'Honig', '#EDBF57'],
+  ['sand', 'Sand', '#E2D8C3'],
+  ['amber', 'Gelb', '#E3D18B'],
   ['olive', 'Olive', '#B9C46A'],
+  ['pistachio', 'Pistazie', '#DDEFA6'],
+  ['lime', 'Limette', '#C5E879'],
   ['moss', 'Moos', '#9FBF73'],
   ['green', 'Grün', '#ACD49D'],
   ['mint', 'Minze', '#BDEBCB'],
@@ -10,8 +21,8 @@ export const palette = [
   ['teal', 'Türkis', '#91CDC5'],
   ['aqua', 'Aqua', '#A9E8E2'],
   ['cyan', 'Cyan', '#A0D6E3'],
-  ['sky', 'Himmelblau', '#86C5EC'],
   ['ice', 'Eisblau', '#C9E4F5'],
+  ['sky', 'Himmelblau', '#86C5EC'],
   ['blue', 'Blau', '#A8C4E5'],
   ['cornflower', 'Kornblume', '#8FAFEA'],
   ['periwinkle', 'Immergrün', '#CBD3F6'],
@@ -23,14 +34,6 @@ export const palette = [
   ['magenta', 'Magenta', '#EB9FD0'],
   ['rose', 'Rosé', '#F5C6D6'],
   ['raspberry', 'Himbeere', '#EB94A8'],
-  ['red', 'Rot', '#E9ADA8'],
-  ['coral', 'Koralle', '#F19A85'],
-  ['apricot', 'Aprikose', '#FBDCC6'],
-  ['orange', 'Orange', '#E9BB94'],
-  ['tangerine', 'Mandarine', '#F0A765'],
-  ['amber', 'Gelb', '#E3D18B'],
-  ['honey', 'Honig', '#EDBF57'],
-  ['sand', 'Sand', '#E2D8C3'],
   ['slate', 'Grau', '#BBC5B5'],
 ];
 /**
@@ -51,8 +54,10 @@ export const legacyPaletteIds = [
   'amber',
   'slate',
 ];
+/** Limette, the first colour up to 0.4.0. Only for an id outside the palette. */
+const fallbackColor = '#C5E879';
 export function paletteColor(id: string) {
-  return palette.find((p) => p[0] === id)?.[2] || palette[0][2];
+  return palette.find((p) => p[0] === id)?.[2] || fallbackColor;
 }
 export function PalettePicker({
   value,

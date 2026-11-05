@@ -86,8 +86,9 @@ test('new upload crops immediately; canceling recrop retains old immutable image
 });
 const preview = (app: { page: import('@playwright/test').Page }) =>
   app.page.getByRole('region', { name: 'Kachelvorschau', exact: true });
+// The list is folded away; fields-layout.spec.ts opens it. Here only its content matters.
 const previewOrder = (app: { page: import('@playwright/test').Page }) =>
-  preview(app).getByRole('list', { name: 'Reihenfolge', exact: true }).getByRole('listitem');
+  preview(app).locator('ol[aria-labelledby="card-preview-order"] li');
 test('preview shows the card in field order', async ({ app, browser, server }) => {
   const defs = await fields(app);
   const tags = defs.find((f) => f.type === 'tags');
@@ -262,6 +263,14 @@ for (const width of [1440, 620, 360, 320])
       };
     });
     expect(geometry.columns).toBe(width <= 600 ? 4 : 8);
+    // The spectrum reads row by row, the same on every size.
+    const top = async (name: string) =>
+      (await dialog.getByRole('button', { name, exact: true }).boundingBox())!.y;
+    const firstRow = await top('Rot');
+    expect(await top('Mandarine')).toBe(firstRow);
+    if (width <= 600) expect(await top('Orange')).toBeGreaterThan(firstRow);
+    else expect(await top('Gelb')).toBe(firstRow);
+    expect(await top('Grau')).toBeGreaterThan(await top('Immergrün'));
     expect(geometry.smallest).toBeGreaterThanOrEqual(44);
     expect(geometry.right).toBeLessThanOrEqual(geometry.dialogRight);
     expect(geometry.overflow).toBeLessThanOrEqual(0);

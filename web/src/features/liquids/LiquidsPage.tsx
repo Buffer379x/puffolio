@@ -12,7 +12,13 @@ import { LiquidTable } from './LiquidTable';
 import { ViewDialog } from './ViewDialog';
 import { FilterBuilder } from './FilterBuilder';
 import { FilterChips } from './FilterChips';
-import { countConditions, quickTags, withQuickTags, withoutQuickTags } from './filters';
+import {
+  countConditions,
+  quickTags,
+  withQuickTags,
+  withoutQuickTags,
+  withoutUnknownTags,
+} from './filters';
 import { TagsInput } from '../../components/FieldInput';
 import { paletteColor } from '../../components/PalettePicker';
 import { useToast } from '../../components/toast';
@@ -68,6 +74,14 @@ export function LiquidsPage({ query }: { query: string }) {
   const update = (patch: Partial<ViewState>) =>
     navigate('/liquids' + writeView({ ...q, ...patch }));
   useEffect(() => setSearch(q.search), [q.search]);
+  // Replaces the address, so going back does not land on the stale link again.
+  useEffect(() => {
+    if (tags.loading || tags.error || !tags.data) return;
+    const clean = withoutUnknownTags(q.filters, tags.data, fields);
+    if (clean === q.filters) return;
+    navigate('/liquids' + writeView({ ...q, filters: clean, page: 1 }), { replace: true });
+    toast('Gelöschter Tag aus dem Filter entfernt');
+  }, [tags.loading, tags.data, tags.error, request]);
   useEffect(() => {
     if (search === q.search) return;
     const timer = setTimeout(() => update({ search, page: 1 }), 250);

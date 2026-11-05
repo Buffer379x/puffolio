@@ -1,4 +1,4 @@
-import type { Filter } from '../../app/types';
+import type { Field, Filter, Tag } from '../../app/types';
 import { isFilterStructure } from './FilterBuilder';
 /**
  * The tag chips on the Liquids page are shorthand for one "any of" condition in
@@ -38,4 +38,37 @@ export function countConditions(filter?: Filter): number {
   if (!filter) return 0;
   if (!isFilterStructure(filter)) return 1;
   return filter.op ? (filter.conditions || []).reduce((sum, c) => sum + countConditions(c), 0) : 1;
+}
+/**
+ * A link may still name a tag deleted since. Its condition would show nothing, with no chip to
+ * remove on the quick tag field, so the id goes. Only tag fields whose tags are loaded count; a
+ * malformed filter stays untouched as above. The same object comes back if nothing changed.
+ */
+export function withoutUnknownTags(
+  filter: Filter | undefined,
+  tags: Tag[],
+  fields: Field[],
+): Filter | undefined {
+  if (!isFilterStructure(filter)) return filter;
+  const known = new Set(fields.filter((f) => f.type === 'tags' && !f.archived).map((f) => f.id));
+  const clean = (node: Filter): Filter | undefined => {
+    if (node.op) {
+      const conditions = node.conditions || [];
+      const kept = conditions.map(clean);
+      if (kept.every((c, i) => c === conditions[i])) return node;
+      const rest = kept.filter((c) => c !== undefined);
+      return rest.length ? { ...node, conditions: rest } : undefined;
+    }
+    if (
+      !known.has(node.fieldId as string) ||
+      !['any', 'all', 'none'].includes(node.operator as string) ||
+      !Array.isArray(node.value)
+    )
+      return node;
+    const ids = node.value as string[];
+    const value = ids.filter((id) => tags.some((t) => t.id === id && t.fieldId === node.fieldId));
+    if (value.length === ids.length) return node;
+    return value.length ? { ...node, value } : undefined;
+  };
+  return clean(filter);
 }

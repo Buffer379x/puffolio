@@ -92,6 +92,8 @@ func (s *server) routes() {
 	s.public("GET /api/v1/fields/{id}/tags", s.listTags)
 	s.handle("POST /api/v1/fields/{id}/tags", s.createTag)
 	s.handle("PATCH /api/v1/fields/{id}/tags/{tagId}", s.updateTag)
+	s.handle("DELETE /api/v1/fields/{id}/tags/{tagId}", s.deleteTag)
+	s.handle("GET /api/v1/fields/{id}/tags/{tagId}/usage", s.tagUsage)
 	s.public("GET /api/v1/liquids", s.listLiquids)
 	s.handle("POST /api/v1/liquids", s.createLiquid)
 	s.public("GET /api/v1/liquids/{id}", s.getLiquid)

@@ -79,10 +79,10 @@ func Normalize(s string) string { return cases.Fold().String(norm.NFC.String(str
 
 // PaletteIDs are the tag colours; migrations/002_palette.sql allows the same ones.
 var PaletteIDs = []string{
-	"lime", "pistachio", "olive", "moss", "green", "mint", "jade", "teal",
-	"aqua", "cyan", "sky", "ice", "blue", "cornflower", "periwinkle", "indigo",
-	"lavender", "violet", "orchid", "pink", "magenta", "rose", "raspberry", "red",
-	"coral", "apricot", "orange", "tangerine", "amber", "honey", "sand", "slate",
+	"red", "coral", "apricot", "tangerine", "orange", "honey", "sand", "amber",
+	"olive", "pistachio", "lime", "moss", "green", "mint", "jade", "teal",
+	"aqua", "cyan", "ice", "sky", "blue", "cornflower", "periwinkle", "indigo",
+	"lavender", "violet", "orchid", "pink", "magenta", "rose", "raspberry", "slate",
 }
 
 func ValidPalette(s string) bool { return slices.Contains(PaletteIDs, s) }
