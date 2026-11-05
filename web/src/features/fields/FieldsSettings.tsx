@@ -1,5 +1,5 @@
 import { createUUID } from '../../app/uuid';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../../app/api';
 import { useApp, useAction, useDirty } from '../../app/state';
 import type { Field, FieldType, Scalar } from '../../app/types';
@@ -581,6 +581,15 @@ export function FieldsSettings() {
   const [deletion, setDeletion] = useState<{ field: Field; values: number }>();
   const a = useAction();
   const addButton = useRef<HTMLButtonElement>(null);
+  const focusAdd = useRef(false);
+  // After the warning has closed: the row that held the opener is gone, and the page behind an
+  // open dialog cannot take focus.
+  useEffect(() => {
+    if (!deletion && focusAdd.current) {
+      focusAdd.current = false;
+      addButton.current?.focus();
+    }
+  }, [deletion]);
   const done = () =>
     void a.run(async () => {
       await refresh();
@@ -739,18 +748,18 @@ export function FieldsSettings() {
           title="Feld endgültig löschen?"
           danger
           onCancel={() => setDeletion(undefined)}
-          onConfirm={() =>
+          onConfirm={() => {
+            if (a.busy) return;
             void a.run(async () => {
               await api('/fields/' + deletion.field.id, 'DELETE', {
                 version: deletion.field.version,
                 confirm: true,
               });
-              setDeletion(undefined);
               await refresh();
-              // The row that held the opener is gone.
-              addButton.current?.focus();
-            })
-          }
+              focusAdd.current = true;
+              setDeletion(undefined);
+            });
+          }}
         >
           <p>
             {deletion.field.label}: {deletion.values} Liquids mit Werten. Diese Werte werden
